@@ -6,6 +6,10 @@
 	"engines": {
 		"vscode": "^1.52.0"
 	},
+	"publisher": "VeriFast",
+	"repository": {
+		"url": "https://github.com/verifast/verifast-vscode"
+	},
 	"categories": [
 		"Other"
 	],
