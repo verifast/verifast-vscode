@@ -1,0 +1,95 @@
+{
+	"name": "verifast",
+	"displayName": "VeriFast",
+	"description": "Modular formal verification tool for C and Java",
+	"version": "0.1.0",
+	"engines": {
+		"vscode": "^1.52.0"
+	},
+	"categories": [
+		"Other"
+	],
+	"activationEvents": [
+		"onCommand:verifast.verify",
+		"onView:verifast.heap",
+		"onView:verifast.locals",
+		"onView:verifast.callerLocals",
+		"onView:verifast.assumptions"
+	],
+	"main": "./out/extension.js",
+	"contributes": {
+		"commands": [
+			{
+				"command": "verifast.verify",
+				"title": "Verify with VeriFast"
+			}
+		],
+		"configuration": {
+			"title": "VeriFast",
+			"properties": {
+				"verifast.verifastCommandPath": {
+					"type": "string",
+					"markdownDescription": "Full path to the VeriFast command (e.g. `C:\\Users\\johndoe\\verifast-19.12.06\\bin\\verifast.exe` (Windows) or `/Users/johndoe/verifast-19.12.-6/bin/verifast` (macOS))",
+					"examples": ["C:\\Users\\johndoe\\verifast-19.12.06\\bin\\verifast.exe", "/Users/johndoe/verifast-19.12.06/bin/verifast"]
+				}
+			}
+		},
+		"keybindings": [
+			{
+				"command": "verifast.verify",
+				"key": "shift+alt+v",
+				"when": "editorTextFocus"
+			}
+		],
+		"viewsContainers": {
+			"activitybar": [
+				{
+					"id": "verifast",
+					"title": "VeriFast",
+					"icon": "branch-left.svg"
+				}
+			]
+		},
+		"views": {
+			"verifast": [
+				{
+					"id": "verifast.locals",
+					"name": "Locals"
+				},
+				{
+					"id": "verifast.callerLocals",
+					"name": "Caller Locals"
+				},
+				{
+					"id": "verifast.heap",
+					"name": "Heap"
+				},
+				{
+					"id": "verifast.assumptions",
+					"name": "Assumptions"
+				}
+			]
+		}
+	},
+	"scripts": {
+		"vscode:prepublish": "npm run compile",
+		"compile": "tsc -p ./",
+		"watch": "tsc -watch -p ./",
+		"pretest": "npm run compile && npm run lint",
+		"lint": "eslint src --ext ts",
+		"test": "node ./out/test/runTest.js"
+	},
+	"devDependencies": {
+		"@types/vscode": "^1.52.0",
+		"@types/glob": "^7.1.3",
+		"@types/mocha": "^8.0.4",
+		"@types/node": "^12.11.7",
+		"eslint": "^7.15.0",
+		"@typescript-eslint/eslint-plugin": "^4.9.0",
+		"@typescript-eslint/parser": "^4.9.0",
+		"glob": "^7.1.6",
+		"mocha": "^8.1.3",
+		"typescript": "^4.1.2",
+		"vscode-test": "^1.4.1"
+	}
+}
