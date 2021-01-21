@@ -31,12 +31,15 @@ This extension contributes the following settings:
 Known TODO items:
 - Allow stepping through the symbolic execution trace
 - Allow viewing the entire symbolic execution tree
-- Go to Definition
 - Browse VeriFast built-in header files
 - Syntax highlighting, code completion inside annotations
 
 ## Release Notes
 
-### 0.1.0
+### 0.2.0 - 2021-01-21
+
+Added *Go to Definition* support. Requires support from VeriFast, so make sure to use the latest VeriFast build.
+
+### 0.1.0 - 2021-01-15
 
 Initial release.

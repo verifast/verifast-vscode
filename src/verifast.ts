@@ -54,3 +54,6 @@ export function getCallStack(ctxts: VFContext[]): ExecutingCtxt[] {
 	}
 	return Array.prototype.concat(...stack.map(ctxt => ctxt == null ? [] : [ctxt])).reverse();
 }
+
+export type VFRange = [number, number, number] | [number, number, number, number];
+export type UseSite = [VFRange, number, VFRange];

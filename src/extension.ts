@@ -5,12 +5,31 @@ import * as child_process from 'child_process';
 import * as readline from 'readline';
 import { strict as assert } from 'assert';
 import * as fs from 'fs';
-import { getCallStack, Loc, SymbolicExecutionError, VFContext, VFResult } from './verifast';
+import { getCallStack, Loc, SymbolicExecutionError, VFContext, VFResult, VFRange, UseSite } from './verifast';
+import * as path_ from 'path';
 
 function sortedListOfEntries(o: {[index: string]: string}) {
 	const entries = Object.entries(o).map(([key, value]) => key + ": " + value);
 	entries.sort();
 	return entries;
+}
+
+/**
+ * Returns the least index such that all elements in `haystack` that are less than `needle` are below that index.
+ */
+function binarySearch(haystackLength: number, isLessThanNeedle: (index: number) => boolean): number {
+	let low = 0; // All elements below `low` are less than `needle`
+	let high = haystackLength; // All elements not below `high` are not less than `needle`
+	for (;;) {
+		if (low == high)
+			return high;
+		const i = low + Math.floor((high - low) / 2);
+		if (isLessThanNeedle(i)) {
+			low = i + 1;
+		} else {
+			high = i;
+		}
+	}
 }
 
 function locationOfLoc(l: Loc): vscode.Location {
@@ -191,6 +210,94 @@ async function showVeriFastResult(result: VFResult) {
 	}
 }
 
+let currentUseSites: null|{uris: vscode.Uri[], useSitesByPath: Map<string, UseSite[]>} = null;
+
+function compareVFRangeAndPosition(vfrange: VFRange, position: vscode.Position): number {
+	const [line, col] = vfrange;
+
+	if (line <= position.line)
+		return -1;
+	else if (line - 1 == position.line) {
+		if (col <= position.character)
+			return -1;
+		else if (col - 1 == position.character)
+			return 0;
+		else
+			return 1;
+	} else
+		return 1;
+}
+
+function definitionLocationOfUseSite(useSite: UseSite): vscode.Location {
+	const [useRange, defPathId, defRange] = useSite;
+	const uri = currentUseSites!.uris[defPathId];
+	let range;
+	if (defRange.length == 3) {
+		const [line, col, col2] = defRange;
+		range = new vscode.Range(line - 1, col - 1, line - 1, col2 - 1);
+	} else {
+		const [line, col, line2, col2] = defRange;
+		range = new vscode.Range(line - 1, col - 1, line2 - 1, col2 - 1);
+	}
+	return new vscode.Location(uri, range);
+}
+
+class VeriFastDefinitionProvider implements vscode.DefinitionProvider {
+    public provideDefinition(document: vscode.TextDocument, position: vscode.Position):
+			vscode.ProviderResult<vscode.Definition|vscode.DefinitionLink[]> {
+		if (currentUseSites == null)
+			return null;
+		const documentUseSites = currentUseSites.useSitesByPath.get(document.fileName);
+		if (documentUseSites) {
+			const index = binarySearch(documentUseSites.length, i => compareVFRangeAndPosition(documentUseSites[i][0], position) < 0);
+			if (documentUseSites[index] && compareVFRangeAndPosition(documentUseSites[index][0], position) == 0) {
+				return definitionLocationOfUseSite(documentUseSites[index]);
+			}
+			const useSite = documentUseSites[index - 1];
+			if (useSite) {
+				const useRange = useSite[0];
+				if (useRange.length == 3) {
+					const [line, col1, col2] = useRange;
+					if (compareVFRangeAndPosition([line, col2, 0], position) >= 0) {
+						return definitionLocationOfUseSite(useSite);
+					} else
+						return null;
+				} else {
+					const [line1, col1, line2, col2] = useRange;
+					if (compareVFRangeAndPosition([line2, col2, 0], position) >= 0) {
+						return definitionLocationOfUseSite(useSite);
+					} else
+						return null;
+				}
+			} else
+				return null;
+		} else
+			return null;
+    }
+}
+
+async function showVeriFastOutput(output: any, path: string) {
+	if (output[0] != 'VeriFast-Json') {
+		await showVeriFastResult(output);
+		return;
+	}
+	const [protocolName, majorVersion, minorVersion, data] = output;
+	if (majorVersion != 2) {
+		vscode.window.showErrorMessage('This version of the VeriFast VSCode extension is out of date with respect to the version of VeriFast. Please update the VeriFast VSCode extension.');
+		return;
+	}
+	const {result, useSites} = data as {result: VFResult, useSites: [string, UseSite[]][]};
+	await showVeriFastResult(result);
+
+	const baseUri = vscode.Uri.file(path);
+
+	const useSites1 = useSites.map<[vscode.Uri, UseSite[]]>(([p, sites]) => [path_.isAbsolute(p) ? vscode.Uri.file(p) : vscode.Uri.joinPath(baseUri, p), sites]);
+	const useSites2 = useSites1.map<[string, UseSite[]]>(([uri, sites]) => [uri.fsPath, sites]);
+	const useSitesByPath = new Map<string, UseSite[]>(useSites2);
+	
+	currentUseSites = {uris: useSites1.map(([uri]) => uri), useSitesByPath};
+}
+
 async function verify() {
 	const editor = vscode.window.activeTextEditor;
 	if (!editor) {
@@ -220,6 +327,8 @@ async function verify() {
 
 	const vfProcessArgs = ["-json", "-c", "-allow_should_fail", "-read_options_from_source_file", path];
 	const vfProcess = child_process.spawn(verifastExecutable, vfProcessArgs);
+	vfProcess.stdin.end(); // If future versions of VeriFast wait for input, ensure they don't wait forever.
+
 	console.log(`Spawned '${verifastExecutable}' with arguments ${JSON.stringify(vfProcessArgs)}`);
 
 	const processFinished = new Promise((resolve, _) => {
@@ -236,7 +345,7 @@ async function verify() {
 				await vscode.window.showErrorMessage(`Failed to parse VeriFast output '${line}': ${ex}`);
 				return;
 			}
-			await showVeriFastResult(result);
+			await showVeriFastOutput(result, path);
 		});
 
 		let stderr = "";
@@ -275,6 +384,11 @@ async function verify() {
 export function activate(context: vscode.ExtensionContext) {
 
 	extensionContext = context;
+
+	context.subscriptions.push(
+		vscode.languages.registerDefinitionProvider(
+			['c', 'cpp', 'verifast_ghost_header'],
+			new VeriFastDefinitionProvider()));
 
 	diagnosticsCollection = vscode.languages.createDiagnosticCollection('verifast');
 	context.subscriptions.push(diagnosticsCollection);

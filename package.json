@@ -2,7 +2,7 @@
 	"name": "verifast",
 	"displayName": "VeriFast",
 	"description": "Modular formal verification tool for C and Java",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"engines": {
 		"vscode": "^1.52.0"
 	},
@@ -43,6 +43,13 @@
 				"command": "verifast.verify",
 				"key": "shift+alt+v",
 				"when": "editorTextFocus"
+			}
+		],
+		"languages": [
+			{
+				"id": "verifast_ghost_header",
+				"extensions": [".gh"],
+				"aliases": ["VeriFast ghost header"]
 			}
 		],
 		"viewsContainers": {
