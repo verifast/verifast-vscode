@@ -172,6 +172,16 @@ async function showSymbolicExecutionError(result: SymbolicExecutionError) {
 }
 
 async function showVeriFastResult(result: VFResult) {
+	diagnosticsCollection.clear();
+	if (currentStatementDecorationType != null) {
+		currentStatementDecorationType.dispose();
+		currentStatementDecorationType = null;
+		// TODO: Remove from context.subscriptions?
+	}
+	if (callerDecorationType != null) {
+		callerDecorationType.dispose();
+		callerDecorationType = null;
+	}
 	switch (result[0]) {
 		case 'success':
 			vscode.window.showInformationMessage(result[1]);
@@ -186,17 +196,7 @@ async function showVeriFastResult(result: VFResult) {
 			{
 				const l = result[1];
 				const msg = result[2];
-				diagnosticsCollection.clear();
 				diagnosticsCollection.set(diagnosticsOfLocMsg(l, msg, []));
-				if (currentStatementDecorationType != null) {
-					currentStatementDecorationType.dispose();
-					currentStatementDecorationType = null;
-					// TODO: Remove from context.subscriptions?
-				}
-				if (callerDecorationType != null) {
-					callerDecorationType.dispose();
-					callerDecorationType = null;
-				}
 				await vscode.commands.executeCommand('vscode.setEditorLayout', {orientation: 1, groups: [{}]});
 				setTimeout(() => vscode.commands.executeCommand('editor.action.marker.next'), 100);
 			}
