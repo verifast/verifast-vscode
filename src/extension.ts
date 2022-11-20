@@ -185,8 +185,14 @@ class StepTreeDataProvider implements vscode.TreeDataProvider<Step> {
 
 let extensionContext: vscode.ExtensionContext;
 
-let currentStatementDecorationType: vscode.TextEditorDecorationType|null = null;
-let callerDecorationType: vscode.TextEditorDecorationType|null = null;
+let currentStatementDecorationType = vscode.window.createTextEditorDecorationType({
+	backgroundColor: "#FFFF00"
+});
+let currentStatementDecorationEditor: vscode.TextEditor|null = null;
+const callerDecorationType = vscode.window.createTextEditorDecorationType({
+	backgroundColor: "#00FF00"
+});
+const callerDecorationEditors: vscode.TextEditor[] = [];
 
 let heapTreeView: vscode.TreeView<string>|null = null;
 let heapTreeViewDataProvider: StringTreeDataProvider|null = null;
@@ -205,6 +211,16 @@ let stepsTreeViewDataProvider: StepTreeDataProvider|null = null;
 
 let diagnosticsCollection: vscode.DiagnosticCollection;
 
+function clearDecorations() {
+	if (currentStatementDecorationEditor != null) {
+		currentStatementDecorationEditor.setDecorations(currentStatementDecorationType, []);
+		currentStatementDecorationEditor = null;
+	}
+	for (const editor of callerDecorationEditors)
+		editor.setDecorations(callerDecorationType, []);
+	callerDecorationEditors.length = 0;
+}
+
 async function showStep(step: Step) {
 	await vscode.commands.executeCommand('workbench.view.extension.verifast');
 
@@ -217,10 +233,9 @@ async function showStep(step: Step) {
 
 	await vscode.commands.executeCommand('vscode.setEditorLayout', {orientation: 1, groups});
 
-	if (callerDecorationType != null) {
-		callerDecorationType.dispose();
-		callerDecorationType = null;
-	}
+	clearDecorations();
+
+	const callerRanges: Map<vscode.TextEditor, vscode.Range[]> = new Map();
 	for (let i = frames.length - 1; 0 <= i; i--) {
 		const frame = frames[i];
 		const [_, h, env, l, msg] = frame;
@@ -230,28 +245,21 @@ async function showStep(step: Step) {
 		});
 		editor.revealRange(location.range, vscode.TextEditorRevealType.InCenter);
 		if (i == 0) {
-			if (currentStatementDecorationType != null) {
-				currentStatementDecorationType.dispose();
-				// TODO: Remove from context.subscriptions?
-			}
-
-			currentStatementDecorationType = vscode.window.createTextEditorDecorationType({
-				backgroundColor: "#FFFF00"
-			});
-			extensionContext.subscriptions.push(currentStatementDecorationType);
-		
+			currentStatementDecorationEditor = editor;
 			editor.setDecorations(currentStatementDecorationType, [location.range]);
 		} else {
-			if (callerDecorationType == null) {
-				callerDecorationType = vscode.window.createTextEditorDecorationType({
-					backgroundColor: "#00FF00"
-				});
-				extensionContext.subscriptions.push(callerDecorationType);
+			let editorCallerRanges = callerRanges.get(editor);
+			if (editorCallerRanges === undefined) {
+				callerRanges.set(editor, editorCallerRanges = []);
+				callerDecorationEditors.push(editor);
 			}
 
-			editor.setDecorations(callerDecorationType, [location.range]);
+			editorCallerRanges.push(location.range);
 		}
 	}
+
+	for (const [editor, editorCallerRanges] of callerRanges.entries())
+		editor.setDecorations(callerDecorationType, editorCallerRanges);
 
 	const firstCtxt = frames[0];
 	const h = firstCtxt[1];
@@ -297,15 +305,7 @@ async function showSymbolicExecutionError(result: SymbolicExecutionError) {
 
 async function showVeriFastResult(result: VFResult) {
 	diagnosticsCollection.clear();
-	if (currentStatementDecorationType != null) {
-		currentStatementDecorationType.dispose();
-		currentStatementDecorationType = null;
-		// TODO: Remove from context.subscriptions?
-	}
-	if (callerDecorationType != null) {
-		callerDecorationType.dispose();
-		callerDecorationType = null;
-	}
+	clearDecorations();
 	switch (result[0]) {
 		case 'success':
 			vscode.window.showInformationMessage(result[1]);
@@ -508,6 +508,8 @@ async function verify() {
 export function activate(context: vscode.ExtensionContext) {
 
 	extensionContext = context;
+
+	context.subscriptions.push(currentStatementDecorationType, callerDecorationType);
 
 	context.subscriptions.push(
 		vscode.languages.registerDefinitionProvider(
