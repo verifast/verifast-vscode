@@ -283,7 +283,7 @@ async function showSymbolicExecutionError(result: SymbolicExecutionError) {
 	stepsTreeViewDataProvider?.setToplevelSteps(steps);
 	stepsTreeView!.reveal(lastStep);
 
-	showStep(lastStep);
+	await showStep(lastStep);
 
 	const frames = lastStep.frames;
 
