@@ -18,7 +18,8 @@
 		"onView:verifast.heap",
 		"onView:verifast.locals",
 		"onView:verifast.callerLocals",
-		"onView:verifast.assumptions"
+		"onView:verifast.assumptions",
+		"onView:verifast.steps"
 	],
 	"main": "./out/extension.js",
 	"contributes": {
@@ -78,6 +79,10 @@
 				{
 					"id": "verifast.assumptions",
 					"name": "Assumptions"
+				},
+				{
+					"id": "verifast.steps",
+					"name": "Steps"
 				}
 			]
 		}

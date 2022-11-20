@@ -32,28 +32,5 @@ export type VFResult =
   | SymbolicExecutionError
   ;
 
-export function getCallStack(ctxts: VFContext[]): ExecutingCtxt[] {
-	const stack: (ExecutingCtxt|null)[] = [null];
-	for (let i = ctxts.length - 1; 0 <= i; i--) {
-		const ctxt = ctxts[i];
-		switch (ctxt[0]) {
-			case 'Executing':
-				stack[stack.length - 1] = ctxt;
-				break;
-			case 'PushSubcontext':
-				stack.push(null);
-				break;
-			case 'PopSubcontext':
-				stack.pop();
-				break;
-			case 'Assuming':
-				break;
-			case 'Branching':
-				break;
-		}
-	}
-	return Array.prototype.concat(...stack.map(ctxt => ctxt == null ? [] : [ctxt])).reverse();
-}
-
 export type VFRange = [number, number, number] | [number, number, number, number];
 export type UseSite = [VFRange, number, VFRange];

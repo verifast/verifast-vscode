@@ -5,7 +5,7 @@ import * as child_process from 'child_process';
 import * as readline from 'readline';
 import { strict as assert } from 'assert';
 import * as fs from 'fs';
-import { getCallStack, Loc, SymbolicExecutionError, VFContext, VFResult, VFRange, UseSite } from './verifast';
+import { Loc, SymbolicExecutionError, VFContext, VFResult, VFRange, UseSite, ExecutingCtxt } from './verifast';
 import * as path_ from 'path';
 
 function sortedListOfEntries(o: {[index: string]: string}) {
@@ -58,6 +58,83 @@ function diagnosticsOfLocMsg(l: Loc, msg: string, info: vscode.DiagnosticRelated
 	}
 }
 
+class Step extends vscode.TreeItem {
+
+	childSteps: Step[] = [];
+
+	constructor(readonly parent: Step|null, label: string, readonly frames: ExecutingCtxt[], readonly assumptions: string[]) {
+		super(label, vscode.TreeItemCollapsibleState.None);
+		this.command = {
+			command: 'verifast.showStep',
+			arguments: [this],
+			title: 'Show'
+		};
+	}
+
+	setChildSteps(childSteps: Step[]) {
+		this.childSteps = childSteps;
+		this.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
+	}
+}
+
+function last<T>(items: T[]) { return items[items.length - 1]; }
+
+function createSteps(ctxts: VFContext[]): [Step[], Step] {
+	const assumptions: string[] = [];
+	const stack: ExecutingCtxt[] = [];
+	const stepListStack: Step[][] = [];
+	let currentStepList: Step[] = [];
+	let currentParentStep: Step | null = null;
+	let latestExecutingCtxt: ExecutingCtxt|null = null;
+	let latestStep: Step|null = null;
+
+	function popSubcontext() {
+		const top = stack.pop();
+		assert(top !== undefined);
+		latestExecutingCtxt = top;
+		const topStepList = stepListStack.pop();
+		assert(topStepList !== undefined);
+		topStepList[topStepList.length - 1].setChildSteps(currentStepList);
+		currentStepList = topStepList;
+		currentParentStep = stepListStack.length == 0 ? null : last(last(stepListStack));
+	}
+
+	for (let i = ctxts.length - 1; 0 <= i; i--) {
+		const ctxt = ctxts[i];
+		switch (ctxt[0]) {
+			case 'Executing':
+				const [_, h, env, l, msg] = ctxt;
+				latestExecutingCtxt = ctxt;
+				currentStepList.push(latestStep = new Step(currentParentStep, msg, [ctxt].concat(stack), assumptions.slice()));
+				break;
+			case 'PushSubcontext':
+				assert(latestExecutingCtxt !== null);
+				stack.push(latestExecutingCtxt);
+				latestExecutingCtxt = null;
+				stepListStack.push(currentStepList);
+				currentParentStep = currentStepList[currentStepList.length - 1];
+				currentStepList = [];
+				break;
+			case 'PopSubcontext':
+				popSubcontext();
+				break;
+			case 'Assuming':
+				assumptions.push(ctxt[1]);
+				break;
+			case 'Branching':
+				assert(latestExecutingCtxt !== null);
+				currentStepList.push(latestStep = new Step(currentParentStep, ctxt[1] == 'LeftBranch' ? 'Executing left branch' : 'Executing right branch', [latestExecutingCtxt].concat(stack), assumptions.slice()));
+				break;
+		}
+	}
+
+	while (stack.length > 0)
+		popSubcontext();
+
+	assert(latestStep !== null);
+	return [currentStepList, latestStep];
+}
+
 class StringTreeDataProvider implements vscode.TreeDataProvider<string> {
 	constructor(private elements: string[]) {}
 
@@ -80,6 +157,32 @@ class StringTreeDataProvider implements vscode.TreeDataProvider<string> {
 	}
 }
 
+class StepTreeDataProvider implements vscode.TreeDataProvider<Step> {
+	constructor(private toplevelSteps: Step[]) {}
+
+	private _onDidChangeTreeData: vscode.EventEmitter<Step | undefined | null | void> = new vscode.EventEmitter<Step | undefined | null | void>();
+	readonly onDidChangeTreeData: vscode.Event<Step | undefined | null | void> = this._onDidChangeTreeData.event;
+  
+	setToplevelSteps(newToplevelSteps: Step[]): void {
+		this.toplevelSteps = newToplevelSteps;
+		this._onDidChangeTreeData.fire();
+	}
+
+	getTreeItem(element: Step): vscode.TreeItem {
+		return element;
+	}
+
+	getChildren(element?: Step): Step[] {
+		if (element === undefined)
+			return this.toplevelSteps;
+		return element.childSteps;
+	}
+
+	getParent(element: Step): vscode.ProviderResult<Step> {
+		return element.parent;
+	}
+}
+
 let extensionContext: vscode.ExtensionContext;
 
 let currentStatementDecorationType: vscode.TextEditorDecorationType|null = null;
@@ -97,13 +200,15 @@ let callerLocalsTreeViewDataProvider: StringTreeDataProvider|null = null;
 let assumptionsTreeView: vscode.TreeView<string>|null = null;
 let assumptionsTreeViewDataProvider: StringTreeDataProvider|null = null;
 
+let stepsTreeView: vscode.TreeView<Step>|null = null;
+let stepsTreeViewDataProvider: StepTreeDataProvider|null = null;
+
 let diagnosticsCollection: vscode.DiagnosticCollection;
 
-async function showSymbolicExecutionError(result: SymbolicExecutionError) {
-	const [_, ctxts, l, msg, url] = result;
-	const frames = getCallStack(ctxts);
-
+async function showStep(step: Step) {
 	await vscode.commands.executeCommand('workbench.view.extension.verifast');
+
+	const frames = step.frames;
 
 	const groups = [];
 	const unit = 1/(frames.length + 1);
@@ -111,8 +216,6 @@ async function showSymbolicExecutionError(result: SymbolicExecutionError) {
 		groups.push({size: i == frames.length - 1 ? 2*unit : unit});
 
 	await vscode.commands.executeCommand('vscode.setEditorLayout', {orientation: 1, groups});
-
-	const infos: vscode.DiagnosticRelatedInformation[] = [];
 
 	if (callerDecorationType != null) {
 		callerDecorationType.dispose();
@@ -122,8 +225,6 @@ async function showSymbolicExecutionError(result: SymbolicExecutionError) {
 		const frame = frames[i];
 		const [_, h, env, l, msg] = frame;
 		const location = locationOfLoc(l);
-		const diagnostic = new vscode.DiagnosticRelatedInformation(location, msg);
-		infos.push(diagnostic);
 		const editor = await vscode.window.showTextDocument(location.uri, {
 			viewColumn: i + 1
 		});
@@ -152,9 +253,6 @@ async function showSymbolicExecutionError(result: SymbolicExecutionError) {
 		}
 	}
 
-	diagnosticsCollection.clear();
-	diagnosticsCollection.set(diagnosticsOfLocMsg(l, msg, infos.reverse()));
-
 	const firstCtxt = frames[0];
 	const h = firstCtxt[1];
 	const env = firstCtxt[2];
@@ -167,7 +265,33 @@ async function showSymbolicExecutionError(result: SymbolicExecutionError) {
 		callerLocalsTreeViewDataProvider!.setElements(sortedListOfEntries(callerEnv));
 	} else
 		callerLocalsTreeViewDataProvider!.setElements(['N/A']);
-	assumptionsTreeViewDataProvider!.setElements(Array.prototype.concat(...ctxts.map((ctxt: VFContext) => ctxt[0] == 'Assuming' ? [ctxt[1]] : [])));
+	assumptionsTreeViewDataProvider!.setElements(step.assumptions);
+}
+
+async function showSymbolicExecutionError(result: SymbolicExecutionError) {
+	const [_, ctxts, l, msg, url] = result;
+
+	const [steps, lastStep] = createSteps(ctxts);
+	stepsTreeViewDataProvider?.setToplevelSteps(steps);
+	stepsTreeView!.reveal(lastStep);
+
+	showStep(lastStep);
+
+	const frames = lastStep.frames;
+
+	const infos: vscode.DiagnosticRelatedInformation[] = [];
+
+	for (let i = frames.length - 1; 0 <= i; i--) {
+		const frame = frames[i];
+		const [_, h, env, l, msg] = frame;
+		const location = locationOfLoc(l);
+		const diagnostic = new vscode.DiagnosticRelatedInformation(location, msg);
+		infos.push(diagnostic);
+	}
+
+	diagnosticsCollection.clear();
+	diagnosticsCollection.set(diagnosticsOfLocMsg(l, msg, infos.reverse()));
+
 	setTimeout(() => vscode.commands.executeCommand('editor.action.marker.next'), 100);
 }
 
@@ -413,9 +537,13 @@ export function activate(context: vscode.ExtensionContext) {
 		treeDataProvider: assumptionsTreeViewDataProvider
 	});
 
-	let disposable = vscode.commands.registerCommand('verifast.verify', verify);
+	stepsTreeViewDataProvider = new StepTreeDataProvider([]);
+	stepsTreeView = vscode.window.createTreeView('verifast.steps', {
+		treeDataProvider: stepsTreeViewDataProvider
+	});
 
-	context.subscriptions.push(disposable);
+	context.subscriptions.push(vscode.commands.registerCommand('verifast.verify', verify));
+	context.subscriptions.push(vscode.commands.registerCommand('verifast.showStep', showStep));
 }
 
 export function deactivate() {}
