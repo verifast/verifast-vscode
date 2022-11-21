@@ -5,7 +5,7 @@ import * as child_process from 'child_process';
 import * as readline from 'readline';
 import { strict as assert } from 'assert';
 import * as fs from 'fs';
-import { Loc, SymbolicExecutionError, VFContext, VFResult, VFRange, UseSite, ExecutingCtxt } from './verifast';
+import { Loc, SymbolicExecutionError, VFContext, VFResult, VFRange, UseSite, ExecutingCtxt, BranchKind } from './verifast';
 import * as path_ from 'path';
 
 function sortedListOfEntries(o: {[index: string]: string}) {
@@ -62,7 +62,7 @@ class Step extends vscode.TreeItem {
 
 	childSteps: Step[] = [];
 
-	constructor(readonly parent: Step|null, label: string, readonly frames: ExecutingCtxt[], readonly assumptions: string[]) {
+	constructor(readonly parent: Step|null, label: string, readonly frames: ExecutingCtxt[], readonly assumptions: string[], readonly branches: [BranchKind, Loc][]) {
 		super(label, vscode.TreeItemCollapsibleState.None);
 		this.command = {
 			command: 'verifast.showStep',
@@ -81,6 +81,7 @@ function last<T>(items: T[]) { return items[items.length - 1]; }
 
 function createSteps(ctxts: VFContext[]): [Step[], Step] {
 	const assumptions: string[] = [];
+	const branches: [BranchKind, Loc][] = [];
 	const stack: ExecutingCtxt[] = [];
 	const stepListStack: Step[][] = [];
 	let currentStepList: Step[] = [];
@@ -105,7 +106,7 @@ function createSteps(ctxts: VFContext[]): [Step[], Step] {
 			case 'Executing':
 				const [_, h, env, l, msg] = ctxt;
 				latestExecutingCtxt = ctxt;
-				currentStepList.push(latestStep = new Step(currentParentStep, msg, [ctxt].concat(stack), assumptions.slice()));
+				currentStepList.push(latestStep = new Step(currentParentStep, msg, [ctxt].concat(stack), assumptions.slice(), branches.slice()));
 				break;
 			case 'PushSubcontext':
 				assert(latestExecutingCtxt !== null);
@@ -123,7 +124,8 @@ function createSteps(ctxts: VFContext[]): [Step[], Step] {
 				break;
 			case 'Branching':
 				assert(latestExecutingCtxt !== null);
-				currentStepList.push(latestStep = new Step(currentParentStep, ctxt[1] == 'LeftBranch' ? 'Executing left branch' : 'Executing right branch', [latestExecutingCtxt].concat(stack), assumptions.slice()));
+				currentStepList.push(latestStep = new Step(currentParentStep, ctxt[1] == 'LeftBranch' ? 'Executing left branch' : 'Executing right branch', [latestExecutingCtxt].concat(stack), assumptions.slice(), branches.slice()));
+				branches.push([ctxt[1], latestExecutingCtxt[3]]);
 				break;
 		}
 	}
@@ -185,7 +187,7 @@ class StepTreeDataProvider implements vscode.TreeDataProvider<Step> {
 
 let extensionContext: vscode.ExtensionContext;
 
-let currentStatementDecorationType = vscode.window.createTextEditorDecorationType({
+const currentStatementDecorationType = vscode.window.createTextEditorDecorationType({
 	backgroundColor: "#FFFF00"
 });
 let currentStatementDecorationEditor: vscode.TextEditor|null = null;
@@ -193,6 +195,25 @@ const callerDecorationType = vscode.window.createTextEditorDecorationType({
 	backgroundColor: "#00FF00"
 });
 const callerDecorationEditors: vscode.TextEditor[] = [];
+
+const extensionDir = path_.dirname(__dirname);
+
+const leftBranchDecorationEditors: vscode.TextEditor[] = [];
+const leftBranchDecorationType = vscode.window.createTextEditorDecorationType({
+	before: {
+		contentIconPath: extensionDir + '/branch-left-decoration.svg',
+		width: '14px',
+		height: '14px'
+	}
+});
+const rightBranchDecorationEditors: vscode.TextEditor[] = [];
+const rightBranchDecorationType = vscode.window.createTextEditorDecorationType({
+	before: {
+		contentIconPath: extensionDir + '/branch-right-decoration.svg',
+		width: '14px',
+		height: '14px'
+	}
+});
 
 let heapTreeView: vscode.TreeView<string>|null = null;
 let heapTreeViewDataProvider: StringTreeDataProvider|null = null;
@@ -211,6 +232,8 @@ let stepsTreeViewDataProvider: StepTreeDataProvider|null = null;
 
 let diagnosticsCollection: vscode.DiagnosticCollection;
 
+let currentBranches: [BranchKind, vscode.Location][] = [];
+
 function clearDecorations() {
 	if (currentStatementDecorationEditor != null) {
 		currentStatementDecorationEditor.setDecorations(currentStatementDecorationType, []);
@@ -219,10 +242,49 @@ function clearDecorations() {
 	for (const editor of callerDecorationEditors)
 		editor.setDecorations(callerDecorationType, []);
 	callerDecorationEditors.length = 0;
+	for (const editor of leftBranchDecorationEditors)
+		editor.setDecorations(leftBranchDecorationType, []);
+	leftBranchDecorationEditors.length = 0;
+	for (const editor of rightBranchDecorationEditors)
+		editor.setDecorations(rightBranchDecorationType, []);
+	rightBranchDecorationEditors.length = 0;
+
+	currentBranches = [];
+}
+
+function clearTrace() {
+	clearDecorations();
+	localsTreeViewDataProvider!.setElements([]);
+	callerLocalsTreeViewDataProvider!.setElements([]);
+	heapTreeViewDataProvider!.setElements([]);
+	assumptionsTreeViewDataProvider!.setElements([]);
+	stepsTreeViewDataProvider!.setToplevelSteps([]);
+}
+
+function showBranchesInEditor(editor: vscode.TextEditor) {
+	const leftBranchRanges: vscode.Range[] = [];
+	const rightBranchRanges: vscode.Range[] = [];
+	for (const [kind, location] of currentBranches) {
+		if (location.uri.toString() == editor.document.uri.toString())
+			if (kind == 'LeftBranch') {
+				leftBranchDecorationEditors.push(editor);
+				leftBranchRanges.push(location.range);
+			} else {
+				rightBranchDecorationEditors.push(editor);
+				rightBranchRanges.push(location.range);
+			}
+	}
+	editor.setDecorations(leftBranchDecorationType, leftBranchRanges);
+	editor.setDecorations(rightBranchDecorationType, rightBranchRanges);
 }
 
 async function showStep(step: Step) {
 	await vscode.commands.executeCommand('workbench.view.extension.verifast');
+
+	clearDecorations();
+
+	for (const [kind, l] of step.branches)
+		currentBranches.push([kind, locationOfLoc(l)]);
 
 	const frames = step.frames;
 
@@ -232,8 +294,6 @@ async function showStep(step: Step) {
 		groups.push({size: i == frames.length - 1 ? 2*unit : unit});
 
 	await vscode.commands.executeCommand('vscode.setEditorLayout', {orientation: 1, groups});
-
-	clearDecorations();
 
 	const callerRanges: Map<vscode.TextEditor, vscode.Range[]> = new Map();
 	for (let i = frames.length - 1; 0 <= i; i--) {
@@ -260,7 +320,10 @@ async function showStep(step: Step) {
 
 	for (const [editor, editorCallerRanges] of callerRanges.entries())
 		editor.setDecorations(callerDecorationType, editorCallerRanges);
-
+	
+	for (const editor of vscode.window.visibleTextEditors)
+		showBranchesInEditor(editor);
+	
 	const firstCtxt = frames[0];
 	const h = firstCtxt[1];
 	const env = firstCtxt[2];
@@ -509,7 +572,11 @@ export function activate(context: vscode.ExtensionContext) {
 
 	extensionContext = context;
 
-	context.subscriptions.push(currentStatementDecorationType, callerDecorationType);
+	context.subscriptions.push(
+		currentStatementDecorationType,
+		callerDecorationType,
+		leftBranchDecorationType,
+		rightBranchDecorationType);
 
 	context.subscriptions.push(
 		vscode.languages.registerDefinitionProvider(
@@ -546,6 +613,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 	context.subscriptions.push(vscode.commands.registerCommand('verifast.verify', verify));
 	context.subscriptions.push(vscode.commands.registerCommand('verifast.showStep', showStep));
+	context.subscriptions.push(vscode.commands.registerCommand('verifast.clearTrace', clearTrace));
 }
 
 export function deactivate() {}

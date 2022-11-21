@@ -27,6 +27,10 @@
 			{
 				"command": "verifast.verify",
 				"title": "Verify with VeriFast"
+			},
+			{
+				"command": "verifast.clearTrace",
+				"title": "Clear VeriFast trace"
 			}
 		],
 		"configuration": {
@@ -43,6 +47,11 @@
 			{
 				"command": "verifast.verify",
 				"key": "shift+alt+v",
+				"when": "editorTextFocus"
+			},
+			{
+				"command": "verifast.clearTrace",
+				"key": "shift+alt+l",
 				"when": "editorTextFocus"
 			}
 		],

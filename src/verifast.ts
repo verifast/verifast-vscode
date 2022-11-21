@@ -13,12 +13,13 @@ export type Env = {[varName: string]: Term};
 export type Message = string;
 export type AssumingCtxt = ['Assuming', Term];
 export type ExecutingCtxt = ['Executing', Heap, Env, Loc, Message];
+export type BranchKind = 'LeftBranch'|'RightBranch';
 export type VFContext =
   | AssumingCtxt
   | ExecutingCtxt
   | ['PushSubcontext']
   | ['PopSubcontext']
-  | ['Branching', 'LeftBranch'|'RightBranch']
+  | ['Branching', BranchKind]
   ;
 
 export type SuccessResult = ['success', Message];
