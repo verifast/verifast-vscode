@@ -485,7 +485,7 @@ async function showVeriFastOutput(output: any, path: string) {
 	currentUseSites = {uris: useSites1.map(([uri]) => uri), useSitesByPath};
 }
 
-async function verify() {
+async function verify(runToCursor?: boolean) {
 	const editor = vscode.window.activeTextEditor;
 	if (!editor) {
 		await vscode.window.showErrorMessage('No active editor');
@@ -493,8 +493,8 @@ async function verify() {
 	}
 	await vscode.commands.executeCommand('workbench.action.files.saveAll');
 	const path = editor.document.fileName;
-	if (!(path.endsWith(".c") || path.endsWith(".java") || path.endsWith(".jarsrc"))) {
-		await vscode.window.showErrorMessage('Active file is not a .c, .java, or .jarsrc file');
+	if (!(path.endsWith(".c") || path.endsWith(".cpp") || path.endsWith(".java") || path.endsWith(".jarsrc"))) {
+		await vscode.window.showErrorMessage('Active file is not a .c, .cpp, .java, or .jarsrc file');
 		return;
 	}
 
@@ -512,7 +512,11 @@ async function verify() {
 		return;
 	}
 
-	const vfProcessArgs = ["-json", "-c", "-allow_should_fail", "-read_options_from_source_file", path];
+	const vfProcessArgs = ["-json", "-c", "-allow_should_fail", "-read_options_from_source_file"];
+	if (runToCursor) {
+		vfProcessArgs.push("-breakpoint", editor.document.fileName + ":" + (editor.selection.active.line + 1));
+	}
+	vfProcessArgs.push(path);
 	const vfProcess = child_process.spawn(verifastExecutable, vfProcessArgs);
 	vfProcess.stdin.end(); // If future versions of VeriFast wait for input, ensure they don't wait forever.
 
@@ -614,6 +618,7 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(vscode.commands.registerCommand('verifast.verify', verify));
 	context.subscriptions.push(vscode.commands.registerCommand('verifast.showStep', showStep));
 	context.subscriptions.push(vscode.commands.registerCommand('verifast.clearTrace', clearTrace));
+	context.subscriptions.push(vscode.commands.registerCommand('verifast.runToCursor', () => verify(true)));
 }
 
 export function deactivate() {}

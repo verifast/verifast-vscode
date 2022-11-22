@@ -15,6 +15,8 @@
 	],
 	"activationEvents": [
 		"onCommand:verifast.verify",
+		"onCommand:verifast.runToCursor",
+		"onCommand:verifast.clearTrace",
 		"onView:verifast.heap",
 		"onView:verifast.locals",
 		"onView:verifast.callerLocals",
@@ -27,6 +29,10 @@
 			{
 				"command": "verifast.verify",
 				"title": "Verify with VeriFast"
+			},
+			{
+				"command": "verifast.runToCursor",
+				"title": "VeriFast: Run to cursor"
 			},
 			{
 				"command": "verifast.clearTrace",
@@ -47,6 +53,11 @@
 			{
 				"command": "verifast.verify",
 				"key": "shift+alt+v",
+				"when": "editorTextFocus"
+			},
+			{
+				"command": "verifast.runToCursor",
+				"key": "shift+alt+c",
 				"when": "editorTextFocus"
 			},
 			{
