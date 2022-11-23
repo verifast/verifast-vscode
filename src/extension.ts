@@ -125,7 +125,8 @@ function createSteps(ctxts: VFContext[]): [Step[], Step] {
 			case 'Branching':
 				assert(latestExecutingCtxt !== null);
 				currentStepList.push(latestStep = new Step(currentParentStep, ctxt[1] == 'LeftBranch' ? 'Executing left branch' : 'Executing right branch', [latestExecutingCtxt].concat(stack), assumptions.slice(), branches.slice()));
-				branches.push([ctxt[1], latestExecutingCtxt[3]]);
+				const ultimateCaller = stack.length == 0 ? latestExecutingCtxt : stack[stack.length - 1];
+				branches.push([ctxt[1], ultimateCaller[3]]);
 				break;
 		}
 	}
