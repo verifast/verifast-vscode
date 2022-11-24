@@ -17,6 +17,7 @@
 		"onCommand:verifast.verify",
 		"onCommand:verifast.runToCursor",
 		"onCommand:verifast.clearTrace",
+		"onCommand:verifast.showExecutionTree",
 		"onView:verifast.heap",
 		"onView:verifast.locals",
 		"onView:verifast.callerLocals",
@@ -28,15 +29,23 @@
 		"commands": [
 			{
 				"command": "verifast.verify",
-				"title": "Verify with VeriFast"
+				"title": "Verify with VeriFast",
+				"category": "VeriFast"
 			},
 			{
 				"command": "verifast.runToCursor",
-				"title": "VeriFast: Run to cursor"
+				"title": "VeriFast: Run to cursor",
+				"category": "VeriFast"
 			},
 			{
 				"command": "verifast.clearTrace",
-				"title": "Clear VeriFast trace"
+				"title": "Clear VeriFast trace",
+				"category": "VeriFast"
+			},
+			{
+				"command": "verifast.showExecutionTree",
+				"title": "Show VeriFast execution tree",
+				"category": "VeriFast"
 			}
 		],
 		"configuration": {
@@ -63,6 +72,11 @@
 			{
 				"command": "verifast.clearTrace",
 				"key": "shift+alt+l",
+				"when": "editorTextFocus"
+			},
+			{
+				"command": "verifast.showExecutionTree",
+				"key": "shift+alt+t",
 				"when": "editorTextFocus"
 			}
 		],
@@ -109,8 +123,8 @@
 	},
 	"scripts": {
 		"vscode:prepublish": "npm run compile",
-		"compile": "tsc -p ./",
-		"watch": "tsc -watch -p ./",
+		"compile": "tsc -p ./ && tsc -p webviews/",
+		"watch": "tsc -watch -p ./ & tsc -watch -p webviews/",
 		"pretest": "npm run compile && npm run lint",
 		"lint": "eslint src --ext ts",
 		"test": "node ./out/test/runTest.js"

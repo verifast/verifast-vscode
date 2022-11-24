@@ -5,7 +5,7 @@ import * as child_process from 'child_process';
 import * as readline from 'readline';
 import { strict as assert } from 'assert';
 import * as fs from 'fs';
-import { Loc, SymbolicExecutionError, VFContext, VFResult, VFRange, UseSite, ExecutingCtxt, BranchKind } from './verifast';
+import { Loc, SymbolicExecutionError, VFContext, VFResult, VFRange, UseSite, ExecutingCtxt, BranchKind, ExecutionForest } from './verifast';
 import * as path_ from 'path';
 
 function sortedListOfEntries(o: {[index: string]: string}) {
@@ -294,7 +294,13 @@ async function showStep(step: Step) {
 	for (let i = 0; i < frames.length; i++)
 		groups.push({size: i == frames.length - 1 ? 2*unit : unit});
 
+	let layout: any = {orientation: 1, groups};
+	const retainExecutionTreePanel = executionTreePanel?.visible;
+	if (retainExecutionTreePanel)
+		layout = {orientation: 0, groups: [{groups}, {'groups': [{}]}]};
 	await vscode.commands.executeCommand('vscode.setEditorLayout', {orientation: 1, groups});
+	if (retainExecutionTreePanel)
+		executionTreePanel?.reveal(groups.length + 1);
 
 	const callerRanges: Map<vscode.TextEditor, vscode.Range[]> = new Map();
 	for (let i = frames.length - 1; 0 <= i; i--) {
@@ -464,7 +470,56 @@ class VeriFastDefinitionProvider implements vscode.DefinitionProvider {
     }
 }
 
-async function showVeriFastOutput(output: any, path: string) {
+let currentExecutionForest: {path: string, forest: ExecutionForest}|null = null;
+let executionTreePanel: vscode.WebviewPanel|null = null;
+
+async function showExecutionTree() {
+	if (executionTreePanel == null) {
+		executionTreePanel = vscode.window.createWebviewPanel(
+			'verifast.executionTree',
+			'VeriFast Execution Tree',
+			vscode.ViewColumn.Beside,
+			{
+				enableScripts: true,
+				retainContextWhenHidden: true
+			}
+		);
+		executionTreePanel.webview.onDidReceiveMessage(targetNodePath => {
+			verifyPath(currentExecutionForest!.path, undefined, targetNodePath);
+		}, null, extensionContext.subscriptions);
+		const scriptUri = vscode.Uri.file(path_.join(extensionContext.extensionPath, 'webviews/out/executionTreePanel.js'));
+		executionTreePanel.webview.html = `<!DOCTYPE html>
+		<html lang="en">
+		<head>
+			<meta charset="UTF-8">
+			<meta name="viewport" content="width=device-width, initial-scale=1.0">
+			<title>VeriFast Execution Tree</title>
+			<style>
+				//* { margin:0; padding:0; }
+				//html, body { width:100%; height:100%; }
+			</style>
+		</head>
+		<body>
+		    <table>
+			<tr><td><select id="selectBox"></select></td></tr>
+			<tr><td><canvas id="canvas"></canvas></td></tr>
+			</table>
+			<script src="${executionTreePanel.webview.asWebviewUri(scriptUri)}"></script>
+		</body>
+		</html>`;
+		
+		executionTreePanel.onDidDispose(() => executionTreePanel = null, null, extensionContext.subscriptions);
+		if (currentExecutionForest != null)
+			executionTreePanel.webview.postMessage(currentExecutionForest.forest);
+		// executionTreePanel.onDidChangeViewState(event => {
+		// 	if (executionTreePanel?.visible && currentExecutionForest != null)
+		// 		executionTreePanel.webview.postMessage(currentExecutionForest);
+		// });
+	} else
+		executionTreePanel.reveal();
+}
+
+async function showVeriFastOutput(output: any, path: string, inTargetNodeMode: boolean) {
 	if (output[0] != 'VeriFast-Json') {
 		await showVeriFastResult(output);
 		return;
@@ -474,7 +529,7 @@ async function showVeriFastOutput(output: any, path: string) {
 		vscode.window.showErrorMessage('This version of the VeriFast VSCode extension is out of date with respect to the version of VeriFast. Please update the VeriFast VSCode extension.');
 		return;
 	}
-	const {result, useSites} = data as {result: VFResult, useSites: [string, UseSite[]][]};
+	const {result, useSites, executionForest} = data as {result: VFResult, useSites: [string, UseSite[]][], executionForest: ExecutionForest};
 	await showVeriFastResult(result);
 
 	const baseUri = vscode.Uri.file(path);
@@ -484,6 +539,11 @@ async function showVeriFastOutput(output: any, path: string) {
 	const useSitesByPath = new Map<string, UseSite[]>(useSites2);
 	
 	currentUseSites = {uris: useSites1.map(([uri]) => uri), useSitesByPath};
+	if (!inTargetNodeMode) {
+		currentExecutionForest = {path, forest: executionForest};
+		if (executionTreePanel != null && executionTreePanel.visible)
+			executionTreePanel.webview.postMessage(currentExecutionForest.forest);
+	}
 }
 
 async function verify(runToCursor?: boolean) {
@@ -499,6 +559,10 @@ async function verify(runToCursor?: boolean) {
 		return;
 	}
 
+	verifyPath(path, runToCursor ? editor.document.fileName + ":" + (editor.selection.active.line + 1) : undefined);
+}
+
+async function verifyPath(path: string, breakpoint?: string, targetNodePath?: string) {
 	const config = vscode.workspace.getConfiguration('verifast');
 	const verifastExecutable = config.verifastCommandPath;
 	if (verifastExecutable == null || (""+verifastExecutable).trim() == "") {
@@ -514,8 +578,10 @@ async function verify(runToCursor?: boolean) {
 	}
 
 	const vfProcessArgs = ["-json", "-c", "-allow_should_fail", "-read_options_from_source_file"];
-	if (runToCursor) {
-		vfProcessArgs.push("-breakpoint", editor.document.fileName + ":" + (editor.selection.active.line + 1));
+	if (breakpoint) {
+		vfProcessArgs.push("-breakpoint", breakpoint);
+	} else if (targetNodePath) {
+		vfProcessArgs.push("-break_at_node", targetNodePath);
 	}
 	vfProcessArgs.push(path);
 	const vfProcess = child_process.spawn(verifastExecutable, vfProcessArgs);
@@ -537,7 +603,7 @@ async function verify(runToCursor?: boolean) {
 				await vscode.window.showErrorMessage(`Failed to parse VeriFast output '${line}': ${ex}`);
 				return;
 			}
-			await showVeriFastOutput(result, path);
+			await showVeriFastOutput(result, path, targetNodePath !== undefined);
 		});
 
 		let stderr = "";
@@ -620,6 +686,7 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(vscode.commands.registerCommand('verifast.showStep', showStep));
 	context.subscriptions.push(vscode.commands.registerCommand('verifast.clearTrace', clearTrace));
 	context.subscriptions.push(vscode.commands.registerCommand('verifast.runToCursor', () => verify(true)));
+	context.subscriptions.push(vscode.commands.registerCommand('verifast.showExecutionTree', showExecutionTree));
 }
 
 export function deactivate() {}

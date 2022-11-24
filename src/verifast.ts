@@ -35,3 +35,4 @@ export type VFResult =
 
 export type VFRange = [number, number, number] | [number, number, number, number];
 export type UseSite = [VFRange, number, VFRange];
+export type ExecutionForest = {msgs: string[], forest: string};
