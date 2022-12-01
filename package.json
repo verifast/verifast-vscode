@@ -26,6 +26,15 @@
 	],
 	"main": "./out/extension.js",
 	"contributes": {
+		"grammars": [
+			{
+				"path": "./injection-grammar.json",
+				"scopeName": "verifast-ghost-range.injection",
+				"injectTo": [
+					"source.c"
+				]
+			}
+		],
 		"commands": [
 			{
 				"command": "verifast.verify",
@@ -123,7 +132,7 @@
 	},
 	"scripts": {
 		"vscode:prepublish": "npm run compile",
-		"compile": "tsc -p ./ && tsc -p webviews/",
+		"compile": "npx js-yaml injection-grammar.yaml > injection-grammar.json && tsc -p ./ && tsc -p webviews/",
 		"watch": "tsc -watch -p ./ & tsc -watch -p webviews/",
 		"pretest": "npm run compile && npm run lint",
 		"lint": "eslint src --ext ts",
@@ -138,7 +147,8 @@
 		"@typescript-eslint/eslint-plugin": "^4.9.0",
 		"@typescript-eslint/parser": "^4.9.0",
 		"glob": "^7.1.6",
-		"mocha": "^8.1.3",
+		"js-yaml": "^4.1.0",
+		"mocha": "^10.1.0",
 		"typescript": "^4.1.2",
 		"vscode-test": "^1.4.1"
 	}

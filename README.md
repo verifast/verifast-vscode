@@ -26,6 +26,35 @@ This extension contributes the following settings:
 
 * `verifast.verifastCommandPath`: path to the VeriFast command-line tool
 
+## Syntax Highlighting for VeriFast Annotations
+
+To get proper syntax highlighting for VeriFast annotations, insert the following into your `settings.json` file (Preferences -> Settings -> Open Settings (JSON)):
+```json
+    "editor.tokenColorCustomizations": {
+        "textMateRules": [
+            {
+                "scope": "verifast-ghost-range",
+                "settings": {
+                    "foreground": "#CC6600"
+                }
+            },
+            {
+                "scope": "verifast-ghost-keyword",
+                "settings": {
+                    "fontStyle": "bold",
+                    "foreground": "#DB9900"
+                }
+            },
+            {
+                "scope": "verifast-ghost-range-delimiter",
+                "settings": {
+                    "foreground": "#808080"
+                }
+            }
+        ],
+    }
+```
+
 ## Known Issues
 
 Known TODO items:

@@ -1,0 +1,47 @@
+scopeName: verifast-ghost-range.injection
+injectionSelector: L:source.c
+patterns:
+- include: "#verifast-single-line-ghost-range"
+- include: "#verifast-multiline-ghost-range"
+repository:
+  verifast-single-line-ghost-range:
+    begin: "//@"
+    end: "$"
+    beginCaptures:
+      0:
+        name: verifast-ghost-range-delimiter
+    name: verifast-ghost-range
+    patterns:
+    - include: "#verifast-ghost-keyword"
+  verifast-multiline-ghost-range:
+    begin: "/\\*@"
+    end: "@\\*/"
+    beginCaptures:
+      0:
+        name: verifast-ghost-range-delimiter
+    endCaptures:
+      0:
+        name: verifast-ghost-range-delimiter
+    name: verifast-ghost-range
+    patterns:
+    - include: "#verifast-ghost-keyword"
+  verifast-ghost-keyword:
+    match: "\
+      \\b(switch|case|return|for\
+      |void|if|else|while\
+      |break|default\
+      |int|true|false\
+      |assert|currentCodeFraction|currentThread|varargs|short\
+      |truncating|typedef|do\
+      |float|double|real\
+      |predicate|copredicate|requires|inductive|fixpoint\
+      |ensures|close|lemma|open|emp|invariant|lemma_auto\
+      |predicate_family|predicate_family_instance|predicate_ctor|leak\
+      |box_class|action|handle_predicate|preserved_by|consuming_box_predicate|consuming_handle_predicate|perform_action|nonghost_callers_only\
+      |create_box|above|below|and_handle|and_fresh_handle|create_handle|create_fresh_handle|dispose_box\
+      |produce_lemma_function_pointer_chunk|duplicate_lemma_function_pointer_chunk|produce_function_pointer_chunk\
+      |producing_box_predicate|producing_handle_predicate|producing_fresh_handle_predicate|box|handle|any|split_fraction|by|merge_fractions\
+      |unloadable_module|decreases|forall_|import_module|require_module|extends|permbased\
+      |terminates|abstract_type|fixpoint_auto|typeid)\\b\
+      "
+    name: verifast-ghost-keyword
