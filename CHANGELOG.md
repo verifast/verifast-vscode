@@ -1,6 +1,8 @@
 # Change Log
 
-## Unreleased
+## 0.9.1 - 2022-12-12
+
+Added the **Verify function with VeriFast** command.
 
 Fixed [crashes due to dead code errors](https://github.com/verifast/verifast-vscode/issues/2).
 

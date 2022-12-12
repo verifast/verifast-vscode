@@ -15,6 +15,7 @@
 	],
 	"activationEvents": [
 		"onCommand:verifast.verify",
+		"onCommand:verifast.verifyFunction",
 		"onCommand:verifast.runToCursor",
 		"onCommand:verifast.clearTrace",
 		"onCommand:verifast.showExecutionTree",
@@ -39,6 +40,11 @@
 			{
 				"command": "verifast.verify",
 				"title": "Verify with VeriFast",
+				"category": "VeriFast"
+			},
+			{
+				"command": "verifast.verifyFunction",
+				"title": "Verify function with VeriFast",
 				"category": "VeriFast"
 			},
 			{
@@ -71,6 +77,11 @@
 			{
 				"command": "verifast.verify",
 				"key": "shift+alt+v",
+				"when": "editorTextFocus"
+			},
+			{
+				"command": "verifast.verifyFunction",
+				"key": "shift+alt+m",
 				"when": "editorTextFocus"
 			},
 			{

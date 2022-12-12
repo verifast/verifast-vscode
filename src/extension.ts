@@ -546,7 +546,7 @@ async function showVeriFastOutput(output: any, path: string, inTargetNodeMode: b
 	}
 }
 
-async function verify(runToCursor?: boolean) {
+async function verify(runToCursor?: boolean, verifyFunction?: boolean) {
 	const editor = vscode.window.activeTextEditor;
 	if (!editor) {
 		await vscode.window.showErrorMessage('No active editor');
@@ -559,10 +559,13 @@ async function verify(runToCursor?: boolean) {
 		return;
 	}
 
-	verifyPath(path, runToCursor ? editor.document.fileName + ":" + (editor.selection.active.line + 1) : undefined);
+	verifyPath(path,
+		runToCursor ? editor.document.fileName + ":" + (editor.selection.active.line + 1) : undefined,
+		undefined,
+		verifyFunction ? editor.document.fileName + ":" + (editor.selection.active.line + 1) : undefined);
 }
 
-async function verifyPath(path: string, breakpoint?: string, targetNodePath?: string) {
+async function verifyPath(path: string, breakpoint?: string, targetNodePath?: string, focus?: string) {
 	const config = vscode.workspace.getConfiguration('verifast');
 	const verifastExecutable = config.verifastCommandPath;
 	if (verifastExecutable == null || (""+verifastExecutable).trim() == "") {
@@ -582,6 +585,8 @@ async function verifyPath(path: string, breakpoint?: string, targetNodePath?: st
 		vfProcessArgs.push("-breakpoint", breakpoint);
 	} else if (targetNodePath) {
 		vfProcessArgs.push("-break_at_node", targetNodePath);
+	} else if (focus) {
+		vfProcessArgs.push("-focus", focus);
 	}
 	vfProcessArgs.push(path);
 	const vfProcess = child_process.spawn(verifastExecutable, vfProcessArgs);
@@ -686,6 +691,7 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(vscode.commands.registerCommand('verifast.showStep', showStep));
 	context.subscriptions.push(vscode.commands.registerCommand('verifast.clearTrace', clearTrace));
 	context.subscriptions.push(vscode.commands.registerCommand('verifast.runToCursor', () => verify(true)));
+	context.subscriptions.push(vscode.commands.registerCommand('verifast.verifyFunction', () => verify(false, true)));
 	context.subscriptions.push(vscode.commands.registerCommand('verifast.showExecutionTree', showExecutionTree));
 }
 
