@@ -70,6 +70,10 @@ Known TODO items:
 
 ## Release Notes
 
+### 0.9.2 - 2023-03-01
+
+Enabled verification of `.rs` files. (Note: for now, this is for our internal use only; VeriFast for Rust is currently under development and we have not yet released it.)
+
 ### 0.9.1 - 2022-12-12
 
 Added the **Verify function with VeriFast** command.

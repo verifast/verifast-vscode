@@ -554,8 +554,8 @@ async function verify(runToCursor?: boolean, verifyFunction?: boolean) {
 	}
 	await vscode.commands.executeCommand('workbench.action.files.saveAll');
 	const path = editor.document.fileName;
-	if (!(path.endsWith(".c") || path.endsWith(".cpp") || path.endsWith(".java") || path.endsWith(".jarsrc"))) {
-		await vscode.window.showErrorMessage('Active file is not a .c, .cpp, .java, or .jarsrc file');
+	if (!(path.endsWith(".c") || path.endsWith(".cpp") || path.endsWith(".java") || path.endsWith(".jarsrc") || path.endsWith(".rs"))) {
+		await vscode.window.showErrorMessage('Active file is not a .c, .cpp, .java, .jarsrc, or .rs file');
 		return;
 	}
 
