@@ -1,5 +1,9 @@
 # Change Log
 
+### 0.9.3 - 2024-10-24
+
+**Clear VeriFast trace** now also clears the diagnostics.
+
 ### 0.9.2 - 2023-03-01
 
 Enabled verification of `.rs` files. (Note: for now, this is for our internal use only; VeriFast for Rust is currently under development and we have not yet released it.)

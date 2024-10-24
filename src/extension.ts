@@ -254,6 +254,7 @@ function clearDecorations() {
 }
 
 function clearTrace() {
+	diagnosticsCollection.clear();
 	clearDecorations();
 	localsTreeViewDataProvider!.setElements([]);
 	callerLocalsTreeViewDataProvider!.setElements([]);

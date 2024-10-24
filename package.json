@@ -2,7 +2,7 @@
 	"name": "verifast",
 	"displayName": "VeriFast",
 	"description": "Modular formal verification tool for C and Java",
-	"version": "0.9.2",
+	"version": "0.9.3",
 	"engines": {
 		"vscode": "^1.52.0"
 	},
