@@ -22,10 +22,28 @@ export type VFContext =
   | ['Branching', BranchKind]
   ;
 
+export type RustcDiagnostic = unknown;
+
+export type QuickFixKind = ['InsertTextAt', SrcPos, string];
+
+export type QuickFix = {
+  description: string;
+  kind: QuickFixKind;
+};
+
+export type ErrorAttributes = {
+  // eslint-disable-next-line @typescript-eslint/naming-convention
+  help_topic?: string;
+  // eslint-disable-next-line @typescript-eslint/naming-convention
+  quick_fixes?: QuickFix[];
+  // eslint-disable-next-line @typescript-eslint/naming-convention
+  rustc_diagnostics?: RustcDiagnostic[];
+};
+
 export type SuccessResult = ['success', Message];
 export type CompilationError = ['CompilationError', Message];
-export type StaticError = ['StaticError', Loc, Message];
-export type SymbolicExecutionError = ['SymbolicExecutionError', VFContext[], Loc, Message, string|null];
+export type StaticError = ['StaticError', Loc, Message, ErrorAttributes];
+export type SymbolicExecutionError = ['SymbolicExecutionError', VFContext[], Loc, Message, ErrorAttributes];
 export type VFResult =
   | SuccessResult
   | CompilationError

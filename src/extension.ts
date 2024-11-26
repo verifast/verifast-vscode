@@ -5,7 +5,7 @@ import * as child_process from 'child_process';
 import * as readline from 'readline';
 import { strict as assert } from 'assert';
 import * as fs from 'fs';
-import { Loc, SymbolicExecutionError, VFContext, VFResult, VFRange, UseSite, ExecutingCtxt, BranchKind, ExecutionForest } from './verifast';
+import { Loc, SymbolicExecutionError, VFContext, VFResult, VFRange, UseSite, ExecutingCtxt, BranchKind, ExecutionForest, ErrorAttributes, QuickFix } from './verifast';
 import * as path_ from 'path';
 
 function sortedListOfEntries(o: {[index: string]: string}) {
@@ -45,13 +45,16 @@ function locationOfLoc(l: Loc): vscode.Location {
 	}
 }
 
-function diagnosticsOfLocMsg(l: Loc, msg: string, info: vscode.DiagnosticRelatedInformation[]): [vscode.Uri, vscode.Diagnostic[]][] {
+let quickFixes: QuickFix[] = [];
+
+function diagnosticsOfLocMsg(l: Loc, msg: string, info: vscode.DiagnosticRelatedInformation[], errorAttributes: ErrorAttributes): [vscode.Uri, vscode.Diagnostic[]][] {
 	switch (l[0]) {
 		case 'Lexed':
 			const location = locationOfLoc(l);
 			const diagnostic = new vscode.Diagnostic(location.range, msg);
 			diagnostic.source = "VeriFast";
 			diagnostic.relatedInformation = info;
+			quickFixes = errorAttributes.quick_fixes || [];
 			return [[location.uri, [diagnostic]]];
 		default:
 			assert(false);
@@ -348,7 +351,7 @@ async function showStep(step: Step) {
 }
 
 async function showSymbolicExecutionError(result: SymbolicExecutionError) {
-	const [_, ctxts, l, msg, url] = result;
+	const [_, ctxts, l, msg, errorAttributes] = result;
 
 	const [steps, lastStep] = createSteps(ctxts);
 	stepsTreeViewDataProvider?.setToplevelSteps(steps);
@@ -369,7 +372,7 @@ async function showSymbolicExecutionError(result: SymbolicExecutionError) {
 	}
 
 	diagnosticsCollection.clear();
-	diagnosticsCollection.set(diagnosticsOfLocMsg(l, msg, infos.reverse()));
+	diagnosticsCollection.set(diagnosticsOfLocMsg(l, msg, infos.reverse(), errorAttributes));
 
 	setTimeout(() => vscode.commands.executeCommand('editor.action.marker.next'), 100);
 }
@@ -391,7 +394,8 @@ async function showVeriFastResult(result: VFResult) {
 			{
 				const l = result[1];
 				const msg = result[2];
-				diagnosticsCollection.set(diagnosticsOfLocMsg(l, msg, []));
+				const errorAttributes = result[3];
+				diagnosticsCollection.set(diagnosticsOfLocMsg(l, msg, [], errorAttributes));
 				await vscode.commands.executeCommand('vscode.setEditorLayout', {orientation: 1, groups: [{}]});
 				setTimeout(() => vscode.commands.executeCommand('editor.action.marker.next'), 100);
 			}
@@ -469,6 +473,27 @@ class VeriFastDefinitionProvider implements vscode.DefinitionProvider {
 		} else
 			return null;
     }
+}
+
+class VeriFastCodeActionProvider implements vscode.CodeActionProvider {
+	provideCodeActions(document: vscode.TextDocument, _range: vscode.Range | vscode.Selection, context: vscode.CodeActionContext, _token: vscode.CancellationToken): vscode.ProviderResult<(vscode.Command | vscode.CodeAction)[]> {
+		const actions: vscode.CodeAction[] = [];
+
+		for (const diagnostic of context.diagnostics) {
+			if (diagnostic.source === 'VeriFast') {
+				for (const quickFix of quickFixes) {
+					const action = new vscode.CodeAction(quickFix.description, vscode.CodeActionKind.QuickFix);
+					action.edit = new vscode.WorkspaceEdit();
+					action.edit.insert(document.uri, diagnostic.range.end, quickFix.kind[2]);
+					action.diagnostics = [diagnostic];
+					action.isPreferred = true;
+					actions.push(action);
+				}
+			}
+		}
+
+		return actions;
+	}
 }
 
 let currentExecutionForest: {path: string, forest: ExecutionForest}|null = null;
@@ -657,11 +682,19 @@ export function activate(context: vscode.ExtensionContext) {
 
 	context.subscriptions.push(
 		vscode.languages.registerDefinitionProvider(
-			['c', 'cpp', 'verifast_ghost_header'],
+			['c', 'cpp', 'verifast_ghost_header', 'rust'],
 			new VeriFastDefinitionProvider()));
 
 	diagnosticsCollection = vscode.languages.createDiagnosticCollection('verifast');
 	context.subscriptions.push(diagnosticsCollection);
+
+	context.subscriptions.push(
+		vscode.languages.registerCodeActionsProvider(
+			['c', 'cpp', 'verifast_ghost_header', 'rust'],
+			new VeriFastCodeActionProvider(),
+			{
+                providedCodeActionKinds: [vscode.CodeActionKind.QuickFix],
+            }));
 
 	heapTreeViewDataProvider = new StringTreeDataProvider(['N/A']);
 	heapTreeView = vscode.window.createTreeView('verifast.heap', {
