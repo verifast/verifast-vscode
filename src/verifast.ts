@@ -31,7 +31,7 @@ export type QuickFix = {
   kind: QuickFixKind;
 };
 
-export type ErrorAttributes = {
+export type ErrorAttributesObject = {
   // eslint-disable-next-line @typescript-eslint/naming-convention
   help_topic?: string;
   // eslint-disable-next-line @typescript-eslint/naming-convention
@@ -39,6 +39,7 @@ export type ErrorAttributes = {
   // eslint-disable-next-line @typescript-eslint/naming-convention
   rustc_diagnostics?: RustcDiagnostic[];
 };
+export type ErrorAttributes = ErrorAttributesObject|string/*Help topic*/|undefined;
 
 export type SuccessResult = ['success', Message];
 export type CompilationError = ['CompilationError', Message];

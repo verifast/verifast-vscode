@@ -5,7 +5,7 @@ import * as child_process from 'child_process';
 import * as readline from 'readline';
 import { strict as assert } from 'assert';
 import * as fs from 'fs';
-import { Loc, SymbolicExecutionError, VFContext, VFResult, VFRange, UseSite, ExecutingCtxt, BranchKind, ExecutionForest, ErrorAttributes, QuickFix } from './verifast';
+import { Loc, SymbolicExecutionError, VFContext, VFResult, VFRange, UseSite, ExecutingCtxt, BranchKind, ExecutionForest, ErrorAttributesObject, QuickFix, ErrorAttributes } from './verifast';
 import * as path_ from 'path';
 
 function sortedListOfEntries(o: {[index: string]: string}) {
@@ -54,7 +54,7 @@ function diagnosticsOfLocMsg(l: Loc, msg: string, info: vscode.DiagnosticRelated
 			const diagnostic = new vscode.Diagnostic(location.range, msg);
 			diagnostic.source = "VeriFast";
 			diagnostic.relatedInformation = info;
-			quickFixes = errorAttributes.quick_fixes || [];
+			quickFixes = (typeof errorAttributes === 'object' ? errorAttributes.quick_fixes : undefined) || [];
 			return [[location.uri, [diagnostic]]];
 		default:
 			assert(false);
