@@ -606,7 +606,7 @@ async function verifyPath(path: string, breakpoint?: string, targetNodePath?: st
 		return;
 	}
 
-	const vfProcessArgs = ["-json", "-c", "-allow_should_fail", "-read_options_from_source_file", "-allow_dead_code"];
+	const vfProcessArgs = ["-json", "-c", "-allow_assume", "-allow_should_fail", "-read_options_from_source_file", "-allow_dead_code"];
 	if (breakpoint) {
 		vfProcessArgs.push("-breakpoint", breakpoint);
 	} else if (targetNodePath) {
