@@ -32,12 +32,12 @@ function binarySearch(haystackLength: number, isLessThanNeedle: (index: number) 
 	}
 }
 
-function locationOfLoc(l: Loc): vscode.Location {
+function locationOfLoc(baseUri: vscode.Uri, l: Loc): vscode.Location {
 	switch (l[0]) {
 		case 'Lexed':
 			const [[startPath, startLine, startCol], [endPath, endLine, endCol]] = l[1];
 			assert(startPath === endPath);
-			const canonicalPath = vscode.Uri.file(startPath);
+			const canonicalPath = path_.isAbsolute(startPath) ? vscode.Uri.file(startPath) : vscode.Uri.joinPath(baseUri, startPath);
 			const range = new vscode.Range(startLine - 1, startCol - 1, endLine - 1, endCol - 1);
 			return new vscode.Location(canonicalPath, range);
 		default:
@@ -47,10 +47,10 @@ function locationOfLoc(l: Loc): vscode.Location {
 
 let quickFixes: QuickFix[] = [];
 
-function diagnosticsOfLocMsg(l: Loc, msg: string, info: vscode.DiagnosticRelatedInformation[], errorAttributes: ErrorAttributes): [vscode.Uri, vscode.Diagnostic[]][] {
+function diagnosticsOfLocMsg(baseUri: vscode.Uri, l: Loc, msg: string, info: vscode.DiagnosticRelatedInformation[], errorAttributes: ErrorAttributes): [vscode.Uri, vscode.Diagnostic[]][] {
 	switch (l[0]) {
 		case 'Lexed':
-			const location = locationOfLoc(l);
+			const location = locationOfLoc(baseUri, l);
 			const diagnostic = new vscode.Diagnostic(location.range, msg);
 			diagnostic.source = "VeriFast";
 			diagnostic.relatedInformation = info;
@@ -65,11 +65,11 @@ class Step extends vscode.TreeItem {
 
 	childSteps: Step[] = [];
 
-	constructor(readonly parent: Step|null, label: string, readonly frames: ExecutingCtxt[], readonly assumptions: string[], readonly branches: [BranchKind, Loc][]) {
+	constructor(baseUri: vscode.Uri, readonly parent: Step|null, label: string, readonly frames: ExecutingCtxt[], readonly assumptions: string[], readonly branches: [BranchKind, Loc][]) {
 		super(label, vscode.TreeItemCollapsibleState.None);
 		this.command = {
 			command: 'verifast.showStep',
-			arguments: [this],
+			arguments: [baseUri, this],
 			title: 'Show'
 		};
 	}
@@ -82,7 +82,7 @@ class Step extends vscode.TreeItem {
 
 function last<T>(items: T[]) { return items[items.length - 1]; }
 
-function createSteps(ctxts: VFContext[]): [Step[], Step] {
+function createSteps(baseUri: vscode.Uri, ctxts: VFContext[]): [Step[], Step] {
 	const assumptions: string[] = [];
 	const branches: [BranchKind, Loc][] = [];
 	const stack: ExecutingCtxt[] = [];
@@ -109,7 +109,7 @@ function createSteps(ctxts: VFContext[]): [Step[], Step] {
 			case 'Executing':
 				const [_, h, env, l, msg] = ctxt;
 				latestExecutingCtxt = ctxt;
-				currentStepList.push(latestStep = new Step(currentParentStep, msg, [ctxt].concat(stack), assumptions.slice(), branches.slice()));
+				currentStepList.push(latestStep = new Step(baseUri, currentParentStep, msg, [ctxt].concat(stack), assumptions.slice(), branches.slice()));
 				break;
 			case 'PushSubcontext':
 				assert(latestExecutingCtxt !== null);
@@ -127,7 +127,7 @@ function createSteps(ctxts: VFContext[]): [Step[], Step] {
 				break;
 			case 'Branching':
 				assert(latestExecutingCtxt !== null);
-				currentStepList.push(latestStep = new Step(currentParentStep, ctxt[1] == 'LeftBranch' ? 'Executing left branch' : 'Executing right branch', [latestExecutingCtxt].concat(stack), assumptions.slice(), branches.slice()));
+				currentStepList.push(latestStep = new Step(baseUri, currentParentStep, ctxt[1] == 'LeftBranch' ? 'Executing left branch' : 'Executing right branch', [latestExecutingCtxt].concat(stack), assumptions.slice(), branches.slice()));
 				const ultimateCaller = stack.length == 0 ? latestExecutingCtxt : stack[stack.length - 1];
 				branches.push([ctxt[1], ultimateCaller[3]]);
 				break;
@@ -283,13 +283,13 @@ function showBranchesInEditor(editor: vscode.TextEditor) {
 	editor.setDecorations(rightBranchDecorationType, rightBranchRanges);
 }
 
-async function showStep(step: Step) {
+async function showStep(baseUri: vscode.Uri, step: Step) {
 	await vscode.commands.executeCommand('workbench.view.extension.verifast');
 
 	clearDecorations();
 
 	for (const [kind, l] of step.branches)
-		currentBranches.push([kind, locationOfLoc(l)]);
+		currentBranches.push([kind, locationOfLoc(baseUri, l)]);
 
 	const frames = step.frames;
 
@@ -310,7 +310,7 @@ async function showStep(step: Step) {
 	for (let i = frames.length - 1; 0 <= i; i--) {
 		const frame = frames[i];
 		const [_, h, env, l, msg] = frame;
-		const location = locationOfLoc(l);
+		const location = locationOfLoc(baseUri, l);
 		const editor = await vscode.window.showTextDocument(location.uri, {
 			viewColumn: i + 1
 		});
@@ -350,14 +350,14 @@ async function showStep(step: Step) {
 	assumptionsTreeViewDataProvider!.setElements(step.assumptions);
 }
 
-async function showSymbolicExecutionError(result: SymbolicExecutionError) {
+async function showSymbolicExecutionError(baseUri: vscode.Uri, result: SymbolicExecutionError) {
 	const [_, ctxts, l, msg, errorAttributes] = result;
 
-	const [steps, lastStep] = createSteps(ctxts);
+	const [steps, lastStep] = createSteps(baseUri, ctxts);
 	stepsTreeViewDataProvider?.setToplevelSteps(steps);
 	stepsTreeView!.reveal(lastStep);
 
-	await showStep(lastStep);
+	await showStep(baseUri, lastStep);
 
 	const frames = lastStep.frames;
 
@@ -366,26 +366,27 @@ async function showSymbolicExecutionError(result: SymbolicExecutionError) {
 	for (let i = frames.length - 1; 0 <= i; i--) {
 		const frame = frames[i];
 		const [_, h, env, l, msg] = frame;
-		const location = locationOfLoc(l);
+		const location = locationOfLoc(baseUri, l);
 		const diagnostic = new vscode.DiagnosticRelatedInformation(location, msg);
 		infos.push(diagnostic);
 	}
 
 	diagnosticsCollection.clear();
-	diagnosticsCollection.set(diagnosticsOfLocMsg(l, msg, infos.reverse(), errorAttributes));
+	diagnosticsCollection.set(diagnosticsOfLocMsg(baseUri, l, msg, infos.reverse(), errorAttributes));
 
 	setTimeout(() => vscode.commands.executeCommand('editor.action.marker.next'), 100);
 }
 
-async function showVeriFastResult(result: VFResult) {
-	diagnosticsCollection.clear();
-	clearDecorations();
+async function showVeriFastResult(baseUri: vscode.Uri, result: VFResult) {
+	clearTrace();
 	switch (result[0]) {
 		case 'success':
+			vscode.commands.executeCommand("closeMarkersNavigation"); // Cause any existing inline problem views to disappear.
 			vscode.window.showInformationMessage(result[1]);
 			break;
 		case 'CompilationError':
 			{
+				vscode.commands.executeCommand("closeMarkersNavigation"); // Cause any existing inline problem views to disappear.
 				const msg = result[1];
 				vscode.window.showErrorMessage(msg);
 			}
@@ -395,7 +396,7 @@ async function showVeriFastResult(result: VFResult) {
 				const l = result[1];
 				const msg = result[2];
 				const errorAttributes = result[3];
-				const diagnostics = diagnosticsOfLocMsg(l, msg, [], errorAttributes);
+				const diagnostics = diagnosticsOfLocMsg(baseUri, l, msg, [], errorAttributes);
 				diagnosticsCollection.set(diagnostics);
 				const uri = diagnostics[0][0];
 				const doc = await vscode.workspace.openTextDocument(uri);
@@ -405,9 +406,10 @@ async function showVeriFastResult(result: VFResult) {
 			}
 			break;
 		case 'SymbolicExecutionError':
-			await showSymbolicExecutionError(result);
+			await showSymbolicExecutionError(baseUri, result);
 			break;
 		default:
+			vscode.commands.executeCommand("closeMarkersNavigation"); // Cause any existing inline problem views to disappear.
 			vscode.window.showErrorMessage(`Unrecognized VeriFast result tag: ${result[0]}`);
 			break;
 	}
@@ -550,8 +552,10 @@ async function showExecutionTree() {
 }
 
 async function showVeriFastOutput(output: any, path: string, inTargetNodeMode: boolean) {
+	const baseUri = vscode.Uri.file(path_.dirname(path));
+
 	if (output[0] != 'VeriFast-Json') {
-		await showVeriFastResult(output);
+		await showVeriFastResult(baseUri, output);
 		return;
 	}
 	const [protocolName, majorVersion, minorVersion, data] = output;
@@ -560,9 +564,8 @@ async function showVeriFastOutput(output: any, path: string, inTargetNodeMode: b
 		return;
 	}
 	const {result, useSites, executionForest} = data as {result: VFResult, useSites: [string, UseSite[]][], executionForest: ExecutionForest};
-	await showVeriFastResult(result);
 
-	const baseUri = vscode.Uri.file(path);
+	await showVeriFastResult(baseUri, result);
 
 	const useSites1 = useSites.map<[vscode.Uri, UseSite[]]>(([p, sites]) => [path_.isAbsolute(p) ? vscode.Uri.file(p) : vscode.Uri.joinPath(baseUri, p), sites]);
 	const useSites2 = useSites1.map<[string, UseSite[]]>(([uri, sites]) => [uri.fsPath, sites]);
@@ -595,7 +598,162 @@ async function verify(runToCursor?: boolean, verifyFunction?: boolean) {
 		verifyFunction ? editor.document.fileName + ":" + (editor.selection.active.line + 1) : undefined);
 }
 
-async function verifyPath(path: string, breakpoint?: string, targetNodePath?: string, focus?: string) {
+function findCargoPackageRoot(path: string) {
+	if (!path.endsWith('.rs') && !path.endsWith('/Cargo.toml'))
+		return null;
+
+	for (;;) {
+		const lastSlashIndex = path.lastIndexOf("/");
+		assert(0 <= lastSlashIndex); // We assume we get an absolute path
+		path = path.substring(0, lastSlashIndex);
+		if (fs.existsSync(path + '/Cargo.toml'))
+			return path + '/';
+		if (path == "")
+			return null;
+	}
+}
+
+interface RustcDiagnosticSpan {
+	// eslint-disable-next-line @typescript-eslint/naming-convention
+	file_name: string; // Relative wrt cargo package root
+	// eslint-disable-next-line @typescript-eslint/naming-convention
+	line_start: number; // 1-based
+	// eslint-disable-next-line @typescript-eslint/naming-convention
+	column_start: number; // 1-based
+	// eslint-disable-next-line @typescript-eslint/naming-convention
+	line_end: number; // Last line
+	// eslint-disable-next-line @typescript-eslint/naming-convention
+	column_end: number; // Exclusive
+}
+
+interface RustcDiagnostic {
+	level: string;
+	message: string;
+	spans: RustcDiagnosticSpan[];
+}
+
+async function showRustcDiagnostic(baseUri: vscode.Uri, rustcDiagnostic: RustcDiagnostic) {
+	diagnosticsCollection.clear();
+	clearDecorations();
+	const span = rustcDiagnostic.spans[0];
+	const canonicalPath =
+		path_.isAbsolute(span.file_name) ?
+			vscode.Uri.file(span.file_name)
+		:
+			vscode.Uri.joinPath(baseUri, span.file_name);
+	const range = new vscode.Range(span.line_start - 1, span.column_start - 1, span.line_end - 1, span.column_end - 1);
+	const location = new vscode.Location(canonicalPath, range);
+	const diagnostic = new vscode.Diagnostic(location.range, rustcDiagnostic.message);
+	diagnostic.source = "rustc via VeriFast";
+	diagnosticsCollection.set([[location.uri, [diagnostic]]]);
+	const doc = await vscode.workspace.openTextDocument(location.uri);
+	const editor = await vscode.window.showTextDocument(doc);
+	await vscode.commands.executeCommand('vscode.setEditorLayout', {orientation: 1, groups: [{}]});
+	setTimeout(() => vscode.commands.executeCommand('editor.action.marker.next'), 100);
+}
+
+function getPATHEnvironmentVariableName(env: NodeJS.ProcessEnv) {
+	// On Windows, the PATH environment variable must be matched case-insensitively
+	if ('PATH' in env)
+		return 'PATH';
+	for (const key in env) {
+		if (key.toLowerCase() == 'path')
+			return key;
+	}
+	return 'PATH';
+}
+
+function addPATH(env: NodeJS.ProcessEnv, path: string) {
+	// eslint-disable-next-line @typescript-eslint/naming-convention
+	const PATHEnvVarName = getPATHEnvironmentVariableName(env);
+	env[PATHEnvVarName] = path + path_.delimiter + env[PATHEnvVarName];
+}
+
+async function verifyPathWithCargo(cargoPackageRoot: string, breakpoint?: string, targetNodePath?: string, focus?: string) {
+	const verifastBin = path_.dirname(await getVeriFastCommandPath());
+
+	const vfProcessArgs = ["verifast", "-json", "-c", "-allow_assume", "-allow_should_fail", "-read_options_from_source_file", "-allow_dead_code"];
+	if (breakpoint) {
+		vfProcessArgs.push("-breakpoint", breakpoint);
+	} else if (targetNodePath) {
+		vfProcessArgs.push("-break_at_node", targetNodePath);
+	} else if (focus) {
+		vfProcessArgs.push("-focus", focus);
+	}
+	const env = {...process.env};
+	addPATH(env, verifastBin);
+
+	const vfProcess = child_process.spawn("cargo", vfProcessArgs, {
+		cwd: cargoPackageRoot,
+		env
+	});
+	vfProcess.stdin.end(); // If future versions of VeriFast wait for input, ensure they don't wait forever.
+
+	console.log(`Spawned 'cargo' with arguments ${JSON.stringify(vfProcessArgs)}`);
+
+	const processFinished = new Promise((resolve, _) => {
+		const stdoutLines = readline.createInterface({
+			input: vfProcess.stdout,
+			crlfDelay: Infinity
+		});
+		stdoutLines.on('line', async (line) => {
+			if (line.startsWith('{"reason"')) {
+				const cargoMessage = JSON.parse(line);
+				if (cargoMessage.reason === 'compiler-message' && cargoMessage.message.level === 'error') {
+					resolve(undefined);
+					stdoutLines.removeAllListeners();
+					vfProcess.removeAllListeners();
+					await showRustcDiagnostic(vscode.Uri.file(cargoPackageRoot), cargoMessage.message);
+					return;
+				}
+			}
+			if (!line.startsWith('["VeriFast-Json"') && !line.startsWith('{"result"'))
+				return;
+			resolve(undefined);
+			let result;
+			try {
+				result = JSON.parse(line);
+			} catch (ex) {
+				await vscode.window.showErrorMessage(`Failed to parse VeriFast output '${line}': ${ex}`);
+				return;
+			}
+			await showVeriFastOutput(result, cargoPackageRoot + "/Cargo.toml", targetNodePath !== undefined);
+		});
+
+		let stderr = "";
+		
+		vfProcess.stderr.on('data', (data) => {
+			console.error(`stderr: ${data}`);
+			stderr += data;
+		});
+		
+		vfProcess.on('exit', (code, signal) => {
+			resolve(undefined);
+			console.log(`child process exited with code ${code} and signal ${signal}`);
+			if (code != 0) {
+				let signalText = signal == null ? "" : ` and signal '${signal}'`;
+				let stderrText = stderr == "" ? "." : `: '${stderr}'`;
+				vscode.window.showErrorMessage(`The 'cargo verifast' process terminated with error code ${code}${signalText}${stderrText}`);
+			}
+		});
+
+		vfProcess.on('error', (error) => {
+			resolve(undefined);
+			console.log(`ChildProcess object raised event 'error' with payload ${error}`);
+			vscode.window.showErrorMessage(`Could not launch the 'cargo verifast' process: '${error}'.`);
+		});
+	});
+
+	const timeout = setTimeout(() => {
+		vscode.window.withProgress({location: vscode.ProgressLocation.Notification, title: "Running 'cargo verifast'..."}, () => {
+			return processFinished;
+		});
+	}, 500);
+
+	processFinished.then(() => clearTimeout(timeout));
+}
+
+async function getVeriFastCommandPath() {
 	const config = vscode.workspace.getConfiguration('verifast');
 	const verifastExecutable = config.verifastCommandPath;
 	if (verifastExecutable == null || (""+verifastExecutable).trim() == "") {
@@ -609,6 +767,18 @@ async function verifyPath(path: string, breakpoint?: string, targetNodePath?: st
 			vscode.commands.executeCommand('workbench.action.openSettings', 'verifast');
 		return;
 	}
+
+	return verifastExecutable;
+}
+
+async function verifyPath(path: string, breakpoint?: string, targetNodePath?: string, focus?: string) {
+	const cargoPackageRoot = findCargoPackageRoot(path);
+	if (cargoPackageRoot !== null) {
+		await verifyPathWithCargo(cargoPackageRoot, breakpoint, targetNodePath, focus);
+		return;
+	}
+
+	const verifastExecutable = await getVeriFastCommandPath();
 
 	const vfProcessArgs = ["-json", "-c", "-allow_assume", "-allow_should_fail", "-read_options_from_source_file", "-allow_dead_code"];
 	if (breakpoint) {
