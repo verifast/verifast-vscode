@@ -1,8 +1,8 @@
 {
 	"name": "verifast",
 	"displayName": "VeriFast",
-	"description": "Modular formal verification tool for C and Java",
-	"version": "0.9.5",
+	"description": "Modular formal verification tool for C, Java, and Rust",
+	"version": "0.9.6",
 	"engines": {
 		"vscode": "^1.52.0"
 	},
@@ -30,9 +30,16 @@
 		"grammars": [
 			{
 				"path": "./injection-grammar.json",
-				"scopeName": "verifast-ghost-range.injection",
+				"scopeName": "verifast-c-ghost-range.injection",
 				"injectTo": [
 					"source.c"
+				]
+			},
+			{
+				"path": "./injection-grammar-rust.json",
+				"scopeName": "verifast-rust-ghost-range.injection",
+				"injectTo": [
+					"source.rust"
 				]
 			}
 		],
@@ -68,8 +75,8 @@
 			"properties": {
 				"verifast.verifastCommandPath": {
 					"type": "string",
-					"markdownDescription": "Full path to the VeriFast command (e.g. `C:\\Users\\johndoe\\verifast-19.12.06\\bin\\verifast.exe` (Windows) or `/Users/johndoe/verifast-19.12.-6/bin/verifast` (macOS))",
-					"examples": ["C:\\Users\\johndoe\\verifast-19.12.06\\bin\\verifast.exe", "/Users/johndoe/verifast-19.12.06/bin/verifast"]
+					"markdownDescription": "Full path to the VeriFast command (e.g. `C:\\Users\\johndoe\\verifast-25.08\\bin\\verifast.exe` (Windows) or `/Users/johndoe/verifast-25.08/bin/verifast` (macOS))",
+					"examples": ["C:\\Users\\johndoe\\verifast-25.08\\bin\\verifast.exe", "/Users/johndoe/verifast-25.08/bin/verifast"]
 				}
 			}
 		},
@@ -143,7 +150,7 @@
 	},
 	"scripts": {
 		"vscode:prepublish": "npm run compile",
-		"compile": "npx js-yaml injection-grammar.yaml > injection-grammar.json && tsc -p ./ && tsc -p webviews/",
+		"compile": "npx js-yaml injection-grammar.yaml > injection-grammar.json && npx js-yaml injection-grammar-rust.yaml > injection-grammar-rust.json && tsc -p ./ && tsc -p webviews/",
 		"watch": "tsc -watch -p ./ & tsc -watch -p webviews/",
 		"pretest": "npm run compile && npm run lint",
 		"lint": "eslint src --ext ts",

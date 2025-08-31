@@ -1,5 +1,11 @@
 # Change Log
 
+### 0.9.6 - 2025-08-31
+
+- If VeriFast reports an error in a file other than the active one, the extension now makes it active
+- The extension now properly clears the old trace and old problem views upon a new verification run
+- If the file being verified is in a Cargo package, VeriFast now runs `cargo verifast` instead of `verifast`, so that the correct root source file and correct `rustc` command-line arguments are used.
+
 ### 0.9.5 - 2025-01-15
 
 - Fixed a regression caused by the 0.9.4 release: parse errors reported by VeriFast were no longer shown [#5](https://github.com/verifast/verifast-vscode/issues/5).

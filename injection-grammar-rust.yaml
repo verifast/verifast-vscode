@@ -1,0 +1,50 @@
+scopeName: verifast-rust-ghost-range.injection
+injectionSelector: L:source.rust
+patterns:
+- include: "#verifast-rust-single-line-ghost-range"
+- include: "#verifast-rust-multiline-ghost-range"
+repository:
+  verifast-rust-single-line-ghost-range:
+    begin: "//@"
+    end: "$"
+    beginCaptures:
+      0:
+        name: verifast-rust-ghost-range-delimiter
+    name: verifast-rust-ghost-range
+    patterns:
+    - include: "#verifast-rust-ghost-keyword"
+  verifast-rust-multiline-ghost-range:
+    begin: "/\\*@"
+    end: "@\\*/"
+    beginCaptures:
+      0:
+        name: verifast-rust-ghost-range-delimiter
+    endCaptures:
+      0:
+        name: verifast-rust-ghost-range-delimiter
+    name: verifast-rust-ghost-range
+    patterns:
+    - include: "#verifast-rust-ghost-keyword"
+  verifast-rust-ghost-keyword:
+    match: "\
+      \\b(as|break|const|continue|crate|else|enum|extern\
+      |false|fn|for|if|impl|in|let|loop|match|mod\
+      |move|mut|pub|ref|return|self|Self|static|struct\
+      |super|trait|true|type|unsafe|use|where|while\
+      |async|await|dyn\
+      |abstract|become|do|final|macro|override|priv\
+      |typeof|unsized|virtual|yield\
+      |try\
+      |assert|assume_correct\
+      |pred|copred|req|inductive|fix\
+      |ens|close|lem|open|emp|inv|lem_auto\
+      |pred_fam|pred_fam_inst|pred_ctor|leak\
+      |box_class|action|handle_pred|preserved_by|consuming_box_pred|consuming_handle_pred|perform_action|nonghost_callers_only\
+      |create_box|above|below|and_handle|and_fresh_handle|create_handle|create_fresh_handle|dispose_box\
+      |produce_lem_ptr_chunk|dup_lem_ptr_chunk|produce_fn_ptr_chunk\
+      |producing_box_pred|producing_handle_pred|producing_fresh_handle_pred|handle|any|split_fraction|by|merge_fractions\
+      |unloadable_module|decreases|forall_|import_module|require_module|extends|permbased\
+      |terminates|abstract_type|fix_auto|typeid|activating|truncating|typedef|fn_type|lem_type\
+      |type_pred_decl|type_pred_def|let_lft|on_unwind_ens|safety_proof)\\b\
+      "
+    name: verifast-rust-ghost-keyword

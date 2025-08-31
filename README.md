@@ -1,16 +1,16 @@
 # VeriFast
 
-[VeriFast](https://github.com/verifast/verifast) is a research prototype of a modular formal verification tool for C and Java programs. It takes as input a `.c` or `.java` file annotated with function/method preconditions and postconditions, loop invariants, data structure descriptions, mathematical definitions, and proof hints, and symbolically executes each function/method, using a separation logic-based representation of memory, to check that it complies with its specification. If the tool reports "0 errors found" then, barring bugs in the tool, this means that every possible execution of the program is free of illegal memory accesses and data races and complies with the provided specifications.
+[VeriFast](https://github.com/verifast/verifast) is a research prototype of a modular formal verification tool for C, Java, and Rust programs. It takes as input a `.c`, `.java`, or `.rs` file annotated with function/method preconditions and postconditions, loop invariants, data structure descriptions, mathematical definitions, and proof hints, and symbolically executes each function/method, using a separation logic-based representation of memory, to check that it complies with its specification. If the tool reports "0 errors found" then, barring bugs in the tool, this means that every possible execution of the program is free of illegal memory accesses and data races and complies with the provided specifications.
 
 This extension provides support for running VeriFast from Visual Studio Code.
 
 ## Features
 
-Issue the **Verify with VeriFast** command (bound by default to Shift+Alt+V) to run VeriFast on the active `.c` or `.java` file. If VeriFast encounters a symbolic execution failure, the symbolic state at the time of failure is shown in the sidebar, and both the source location of the failure and the call site (if applicable) are highlighted and shown.
+Issue the **Verify with VeriFast** command (bound by default to Shift+Alt+V) to run VeriFast on the active `.c`, `.java`, or `.rs` file. If VeriFast encounters a symbolic execution failure, the symbolic state at the time of failure is shown in the sidebar, and both the source location of the failure and the call site (if applicable) are highlighted and shown.
 
 ![Heartbleed example](screenshot.png)
 
-To set command-line options, specify them on the first line of your `.c` or `.java` file. For example:
+To set command-line options, specify them on the first line of your `.c`, `.java`, or `.rs` file. For example:
 
 ```c
 // verifast_options{disable_overflow_check prover:z3v4.5 target:Linux64}
@@ -24,8 +24,7 @@ Other commands:
 
 ## Requirements
 
-You need to install VeriFast itself separately. This extension requires version verifast-21.04-125-g607ce955
- (created 2022-12-12) or newer. Download the [latest nightly build](https://github.com/verifast/verifast#binaries), extract it to any location on your machine, and configure the path to the VeriFast command in your VSCode settings (Settings -> Extensions -> VeriFast).
+You need to install VeriFast itself separately. Download the [latest nightly build](https://github.com/verifast/verifast#binaries), extract it to any location on your machine, and configure the path to the VeriFast command in your VSCode settings (Settings -> Extensions -> VeriFast).
 
 ## Extension Settings
 
@@ -35,25 +34,44 @@ This extension contributes the following settings:
 
 ## Syntax Highlighting for VeriFast Annotations
 
-To get proper syntax highlighting for VeriFast annotations, insert the following into your `settings.json` file (Preferences -> Settings -> Open Settings (JSON)):
+To get syntax highlighting for VeriFast annotations, insert the following into your `settings.json` file (Preferences -> Settings -> Open Settings (JSON)) (but see the known issues below):
 ```json
     "editor.tokenColorCustomizations": {
         "textMateRules": [
             {
-                "scope": "verifast-ghost-range",
+                "scope": "verifast-c-ghost-range",
                 "settings": {
                     "foreground": "#CC6600"
                 }
             },
             {
-                "scope": "verifast-ghost-keyword",
+                "scope": "verifast-c-ghost-keyword",
                 "settings": {
                     "fontStyle": "bold",
                     "foreground": "#DB9900"
                 }
             },
             {
-                "scope": "verifast-ghost-range-delimiter",
+                "scope": "verifast-c-ghost-range-delimiter",
+                "settings": {
+                    "foreground": "#808080"
+                }
+            },
+            {
+                "scope": "verifast-rust-ghost-range",
+                "settings": {
+                    "foreground": "#CC6600"
+                }
+            },
+            {
+                "scope": "verifast-rust-ghost-keyword",
+                "settings": {
+                    "fontStyle": "bold",
+                    "foreground": "#DB9900"
+                }
+            },
+            {
+                "scope": "verifast-rust-ghost-range-delimiter",
                 "settings": {
                     "foreground": "#808080"
                 }
@@ -65,10 +83,18 @@ To get proper syntax highlighting for VeriFast annotations, insert the following
 ## Known Issues
 
 Known TODO items:
+- In `.c` files, indented multiline annotations are not recognized as VeriFast ghost ranges
+- In `.rs` files, rust-analyzer's assignment of semantic token type 'Comment' to comment tokens overrides the VeriFast ghost range color
 - Browse VeriFast built-in header files
 - Code completion inside annotations
 
 ## Release Notes
+
+### 0.9.6 - 2025-08-31
+
+- If VeriFast reports an error in a file other than the active one, the extension now makes it active
+- The extension now properly clears the old trace and old problem views upon a new verification run
+- If the file being verified is in a Cargo package, VeriFast now runs `cargo verifast` instead of `verifast`, so that the correct root source file and correct `rustc` command-line arguments are used.
 
 ### 0.9.5 - 2025-01-15
 
