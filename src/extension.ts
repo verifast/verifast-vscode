@@ -395,7 +395,11 @@ async function showVeriFastResult(result: VFResult) {
 				const l = result[1];
 				const msg = result[2];
 				const errorAttributes = result[3];
-				diagnosticsCollection.set(diagnosticsOfLocMsg(l, msg, [], errorAttributes));
+				const diagnostics = diagnosticsOfLocMsg(l, msg, [], errorAttributes);
+				diagnosticsCollection.set(diagnostics);
+				const uri = diagnostics[0][0];
+				const doc = await vscode.workspace.openTextDocument(uri);
+				const editor = await vscode.window.showTextDocument(doc);
 				await vscode.commands.executeCommand('vscode.setEditorLayout', {orientation: 1, groups: [{}]});
 				setTimeout(() => vscode.commands.executeCommand('editor.action.marker.next'), 100);
 			}
