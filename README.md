@@ -90,6 +90,10 @@ Known TODO items:
 
 ## Release Notes
 
+### 0.9.8 - 2025-09-04
+
+Fixed a problem that prevented the extension from loading on Windows.
+
 ### 0.9.7 - 2025-09-04
 
 The extension now offers to download VeriFast if it does not find an existing installation.

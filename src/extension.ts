@@ -7,7 +7,7 @@ import { strict as assert } from 'assert';
 import * as fs from 'fs';
 import { Loc, SymbolicExecutionError, VFContext, VFResult, VFRange, UseSite, ExecutingCtxt, BranchKind, ExecutionForest, ErrorAttributesObject, QuickFix, ErrorAttributes } from './verifast';
 import * as path_ from 'path';
-import * as yauzl from 'yauzl-promise';
+import * as unzipper from 'unzipper';
 import { pipeline } from 'node:stream/promises';
 import * as os from 'node:os';
 import * as tar from 'tar';
@@ -838,9 +838,7 @@ async function downloadVeriFast() {
 		}
 		// All files in the assert archive are inside a directory named verifast-<version>.
 		// So we can just directly extract the archive to ~/.verifast/toolchains.
-		// Use yauzl-promise
 		// But first extract to a temporary directory and then rename it to avoid leaving a half-extracted toolchain in case of interruption.
-		// (yauzl does not support extracting to a temporary directory directly)
 		const tmpExtractDir = os.tmpdir();
 		const tmpToolchainDir = tmpExtractDir + '/' + toolchainDirName;
 		if (fs.existsSync(tmpToolchainDir)) {
@@ -848,22 +846,8 @@ async function downloadVeriFast() {
 			await fs.promises.rm(tmpToolchainDir, {recursive: true, force: true});
 		}
 		if (asset.name.endsWith('.zip')) {
-			const zipFile = await yauzl.fromBuffer(buffer);
-			try {
-				for await (const entry of zipFile) {
-					if (entry.filename.endsWith('/')) {
-						await fs.promises.mkdir(`${tmpExtractDir}/${entry.filename}`);
-					} else {
-						const readStream = await entry.openReadStream();
-						const writeStream = fs.createWriteStream(
-							`${tmpExtractDir}/${entry.filename}`
-						);
-						await pipeline(readStream, writeStream);
-					}
-				}
-			} finally {
-				await zipFile.close();
-			}
+			const zipFile = await unzipper.Open.buffer(buffer);
+			await zipFile.extract({path: tmpExtractDir});
 			// Rename the extracted directory to the final location
 			if (fs.existsSync(extractDir + '/' + toolchainDirName)) {
 				// Remove it first
@@ -902,9 +886,9 @@ async function getVeriFastCommandPath() {
 		const homeDir = process.env.HOME || process.env.USERPROFILE;
 		if (fs.existsSync(homeDir + "/.verifast/default_toolchain")) {
 			const defaultToolchain = fs.readFileSync(homeDir + "/.verifast/default_toolchain", {encoding: 'utf8'}).trim();
-			if (fs.existsSync(defaultToolchain + "/bin/verifast")) {
-				return defaultToolchain + "/bin/verifast";
-			}
+			const verifastCommand = defaultToolchain + "/bin/verifast" + (process.platform == 'win32' ? ".exe" : "");
+			if (fs.existsSync(verifastCommand))
+				return verifastCommand;
 		}
 		const result = await vscode.window.showErrorMessage('No VeriFast installation found.', 'Download', 'Configure path');
 		switch (result) {
