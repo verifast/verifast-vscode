@@ -3,6 +3,7 @@
 		"module": "es6",
 		"target": "es6",
 		"outDir": "out",
+		"types": [],
 		"lib": [
 			"es6", "DOM"
 		],

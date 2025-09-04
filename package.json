@@ -2,7 +2,7 @@
 	"name": "verifast",
 	"displayName": "VeriFast",
 	"description": "Modular formal verification tool for C, Java, and Rust",
-	"version": "0.9.6",
+	"version": "0.9.7",
 	"engines": {
 		"vscode": "^1.52.0"
 	},
@@ -76,7 +76,10 @@
 				"verifast.verifastCommandPath": {
 					"type": "string",
 					"markdownDescription": "Full path to the VeriFast command (e.g. `C:\\Users\\johndoe\\verifast-25.08\\bin\\verifast.exe` (Windows) or `/Users/johndoe/verifast-25.08/bin/verifast` (macOS))",
-					"examples": ["C:\\Users\\johndoe\\verifast-25.08\\bin\\verifast.exe", "/Users/johndoe/verifast-25.08/bin/verifast"]
+					"examples": [
+						"C:\\Users\\johndoe\\verifast-25.08\\bin\\verifast.exe",
+						"/Users/johndoe/verifast-25.08/bin/verifast"
+					]
 				}
 			}
 		},
@@ -110,8 +113,12 @@
 		"languages": [
 			{
 				"id": "verifast_ghost_header",
-				"extensions": [".gh"],
-				"aliases": ["VeriFast ghost header"]
+				"extensions": [
+					".gh"
+				],
+				"aliases": [
+					"VeriFast ghost header"
+				]
 			}
 		],
 		"viewsContainers": {
@@ -157,17 +164,22 @@
 		"test": "node ./out/test/runTest.js"
 	},
 	"devDependencies": {
-		"@types/vscode": "^1.52.0",
 		"@types/glob": "^7.1.3",
 		"@types/mocha": "^8.0.4",
-		"@types/node": "^12.11.7",
-		"eslint": "^7.15.0",
+		"@types/node": "^24.3.1",
+		"@types/vscode": "^1.52.0",
+		"@types/yauzl-promise": "^4.0.1",
 		"@typescript-eslint/eslint-plugin": "^4.9.0",
 		"@typescript-eslint/parser": "^4.9.0",
+		"eslint": "^7.15.0",
 		"glob": "^7.1.6",
 		"js-yaml": "^4.1.0",
 		"mocha": "^10.1.0",
-		"typescript": "^4.1.2",
+		"typescript": "^5.9.2",
 		"vscode-test": "^1.4.1"
+	},
+	"dependencies": {
+		"tar": "^7.4.3",
+		"yauzl-promise": "^4.0.0"
 	}
 }

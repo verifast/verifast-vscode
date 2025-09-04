@@ -7,6 +7,11 @@ import { strict as assert } from 'assert';
 import * as fs from 'fs';
 import { Loc, SymbolicExecutionError, VFContext, VFResult, VFRange, UseSite, ExecutingCtxt, BranchKind, ExecutionForest, ErrorAttributesObject, QuickFix, ErrorAttributes } from './verifast';
 import * as path_ from 'path';
+import * as yauzl from 'yauzl-promise';
+import { pipeline } from 'node:stream/promises';
+import * as os from 'node:os';
+import * as tar from 'tar';
+import * as stream from 'node:stream';
 
 function sortedListOfEntries(o: {[index: string]: string}) {
 	const entries = Object.entries(o).map(([key, value]) => key + ": " + value);
@@ -753,12 +758,163 @@ async function verifyPathWithCargo(cargoPackageRoot: string, breakpoint?: string
 	processFinished.then(() => clearTimeout(timeout));
 }
 
+async function getVeriFastAssetSuffix(): Promise<string|undefined> {
+	const platform = process.platform;
+	const arch = process.arch;
+	if (platform == 'win32') {
+		if (arch == 'x64')
+			return '-windows.zip';
+	} else if (platform == 'darwin') {
+		if (arch == 'x64')
+			return '-macos.tar.gz';
+		else if (arch == 'arm64')
+			return '-macos-aarch.tar.gz';
+	} else if (platform == 'linux') {
+		if (arch == 'x64')
+			return '-linux.tar.gz';
+	}
+	vscode.window.showErrorMessage(`Your platform is not supported: ${platform} ${arch}`);
+	return;
+}
+
+type GitHubRelease = {
+	// eslint-disable-next-line @typescript-eslint/naming-convention
+	tag_name: string,
+	// eslint-disable-next-line @typescript-eslint/naming-convention
+	assets: {name: string, browser_download_url: string}[]
+}
+
+async function downloadVeriFast() {
+	vscode.window.withProgress({location: vscode.ProgressLocation.Notification, title: 'Downloading VeriFast...'}, async (progress) => {
+		progress.report({message: 'Getting release information from github.com/verifast/verifast...'});
+		// Get the list of release assets from the `nightly` release of the VeriFast repo on GitHub.
+		const response = await fetch('https://api.github.com/repos/verifast/verifast/releases/tags/nightly', {
+			headers: {
+				// eslint-disable-next-line @typescript-eslint/naming-convention
+				'Accept': 'application/vnd.github.v3+json'
+			}
+		});
+		if (!response.ok) {
+			vscode.window.showErrorMessage(`Could not get the list of assets of the nightly VeriFast release from GitHub: ${response.status} ${response.statusText}`);
+			return;
+		}
+		const release = await response.json() as GitHubRelease;
+		const assets = release.assets;
+		const assetSuffix = await getVeriFastAssetSuffix();
+		if (assetSuffix === undefined)
+			return;
+		const asset = assets.find(a => a.name.endsWith(assetSuffix!));
+		if (asset === undefined) {
+			vscode.window.showErrorMessage(`Could not find a VeriFast release asset for your platform: ${process.platform} ${process.arch}`);
+			return;
+		}
+		const downloadUrl = asset.browser_download_url;
+
+		// The toolchain directory name is the asset name without the suffix.
+		const toolchainDirName = asset.name.substring(0, asset.name.length - assetSuffix!.length);
+
+		// Download the asset
+		progress.report({message: `Downloading release asset ${asset.name}...`});
+		const downloadResponse = await fetch(downloadUrl);
+		if (!downloadResponse.ok) {
+			vscode.window.showErrorMessage(`Could not download the VeriFast release asset from GitHub: ${downloadResponse.status} ${downloadResponse.statusText}`);
+			return;
+		}
+		const buffer = Buffer.from(await downloadResponse.arrayBuffer());
+
+		const homeDir = process.env.HOME || process.env.USERPROFILE;
+		const extractDir = homeDir + '/.verifast/toolchains';
+		progress.report({message: `Extracting release asset ${asset.name} to ${extractDir}...`});
+		// Extract the archive to ~/.verifast/toolchains
+		if (homeDir === undefined) {
+			vscode.window.showErrorMessage('Could not determine home directory.');
+			return;
+		}
+		if (!fs.existsSync(homeDir + '/.verifast')) {
+			fs.mkdirSync(homeDir + '/.verifast');
+		}
+		if (!fs.existsSync(homeDir + '/.verifast/toolchains')) {
+			fs.mkdirSync(homeDir + '/.verifast/toolchains');
+		}
+		// All files in the assert archive are inside a directory named verifast-<version>.
+		// So we can just directly extract the archive to ~/.verifast/toolchains.
+		// Use yauzl-promise
+		// But first extract to a temporary directory and then rename it to avoid leaving a half-extracted toolchain in case of interruption.
+		// (yauzl does not support extracting to a temporary directory directly)
+		const tmpExtractDir = os.tmpdir();
+		const tmpToolchainDir = tmpExtractDir + '/' + toolchainDirName;
+		if (fs.existsSync(tmpToolchainDir)) {
+			// Remove it first
+			await fs.promises.rm(tmpToolchainDir, {recursive: true, force: true});
+		}
+		if (asset.name.endsWith('.zip')) {
+			const zipFile = await yauzl.fromBuffer(buffer);
+			try {
+				for await (const entry of zipFile) {
+					if (entry.filename.endsWith('/')) {
+						await fs.promises.mkdir(`${tmpExtractDir}/${entry.filename}`);
+					} else {
+						const readStream = await entry.openReadStream();
+						const writeStream = fs.createWriteStream(
+							`${tmpExtractDir}/${entry.filename}`
+						);
+						await pipeline(readStream, writeStream);
+					}
+				}
+			} finally {
+				await zipFile.close();
+			}
+			// Rename the extracted directory to the final location
+			if (fs.existsSync(extractDir + '/' + toolchainDirName)) {
+				// Remove it first
+				await fs.promises.rm(extractDir + '/' + toolchainDirName, {recursive: true, force: true});
+			}
+			await fs.promises.rename(tmpToolchainDir, extractDir + '/' + toolchainDirName);
+		} else if (asset.name.endsWith('.tar.gz')) {
+			const writeStream = await tar.x({
+				C: tmpExtractDir,
+			});
+			await pipeline(stream.Readable.from(buffer), writeStream);
+			// Rename the extracted directory to the final location
+			if (fs.existsSync(extractDir + '/' + toolchainDirName)) {
+				// Remove it first
+				await fs.promises.rm(extractDir + '/' + toolchainDirName, {recursive: true, force: true});
+			}
+			await fs.promises.rename(tmpToolchainDir, extractDir + '/' + toolchainDirName);
+		} else {
+			assert(false, 'Unreachable');
+		}
+		
+		// Set ~/.verifast/default_toolchain to point to the new toolchain
+		fs.writeFileSync(homeDir + '/.verifast/default_toolchain', extractDir + '/' + toolchainDirName, {encoding: 'utf8'});
+
+		// The version number is the toolchain directory name without the "verifast-" prefix.
+		const version = toolchainDirName.startsWith('verifast-') ? toolchainDirName.substring('verifast-'.length) : toolchainDirName;
+
+		vscode.window.showInformationMessage(`Installed VeriFast ${version} to '${extractDir + '/' + toolchainDirName}'.`);
+	});
+}
+
 async function getVeriFastCommandPath() {
 	const config = vscode.workspace.getConfiguration('verifast');
 	const verifastExecutable = config.verifastCommandPath;
 	if (verifastExecutable == null || (""+verifastExecutable).trim() == "") {
-		if (await vscode.window.showErrorMessage('Please configure the path to the VeriFast command.', 'Open Settings') == 'Open Settings')
-			vscode.commands.executeCommand('workbench.action.openSettings', 'verifast');
+		const homeDir = process.env.HOME || process.env.USERPROFILE;
+		if (fs.existsSync(homeDir + "/.verifast/default_toolchain")) {
+			const defaultToolchain = fs.readFileSync(homeDir + "/.verifast/default_toolchain", {encoding: 'utf8'}).trim();
+			if (fs.existsSync(defaultToolchain + "/bin/verifast")) {
+				return defaultToolchain + "/bin/verifast";
+			}
+		}
+		const result = await vscode.window.showErrorMessage('No VeriFast installation found.', 'Download', 'Configure path');
+		switch (result) {
+			case 'Download':
+				await downloadVeriFast();
+				return;
+			case 'Configure path':
+				vscode.commands.executeCommand('workbench.action.openSettings', 'verifast');
+				break;
+		}
 		return;
 	}
 
