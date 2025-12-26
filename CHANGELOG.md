@@ -1,5 +1,9 @@
 # Change Log
 
+### 0.9.9 - 2025-12-26
+
+Added syntax highlighting for VeriFast ghost header (`.gh`) files.
+
 ### 0.9.8 - 2025-09-04
 
 Fixed a problem that prevented the extension from loading on Windows.

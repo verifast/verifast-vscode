@@ -2,7 +2,7 @@
 	"name": "verifast",
 	"displayName": "VeriFast",
 	"description": "Modular formal verification tool for C, Java, and Rust",
-	"version": "0.9.8",
+	"version": "0.9.9",
 	"engines": {
 		"vscode": "^1.103.0"
 	},
@@ -41,6 +41,11 @@
 				"injectTo": [
 					"source.rust"
 				]
+			},
+			{
+				"language": "verifast_ghost_header",
+				"scopeName": "verifast-c-ghost-range",
+				"path": "./ghost-header-grammar.json"
 			}
 		],
 		"commands": [
@@ -118,7 +123,8 @@
 				],
 				"aliases": [
 					"VeriFast ghost header"
-				]
+				],
+				"configuration": "./ghost-header-config.json"
 			}
 		],
 		"viewsContainers": {
@@ -157,7 +163,7 @@
 	},
 	"scripts": {
 		"vscode:prepublish": "npm run compile",
-		"compile": "npx js-yaml injection-grammar.yaml > injection-grammar.json && npx js-yaml injection-grammar-rust.yaml > injection-grammar-rust.json && tsc -p ./ && tsc -p webviews/",
+		"compile": "npx js-yaml injection-grammar.yaml > injection-grammar.json && npx js-yaml injection-grammar-rust.yaml > injection-grammar-rust.json && npx js-yaml ghost-header-grammar.yaml > ghost-header-grammar.json && tsc -p ./ && tsc -p webviews/",
 		"watch": "tsc -watch -p ./ & tsc -watch -p webviews/",
 		"pretest": "npm run compile && npm run lint",
 		"lint": "eslint src --ext ts",

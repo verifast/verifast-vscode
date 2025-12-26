@@ -1,0 +1,51 @@
+scopeName: verifast-c-ghost-range
+patterns:
+- include: "#keywords"
+- include: "#comments"
+- include: "#preprocessor"
+repository:
+  keywords:
+    patterns:
+    - include: "#verifast-c-ghost-keyword"
+  comments:
+    patterns:
+    - name: comment.line.double-slash.verifast-c-ghost
+      match: "//.*$"
+    - name: comment.block.verifast-c-ghost
+      begin: "/\\*"
+      end: "\\*/"
+  preprocessor:
+    patterns:
+    - name: meta.preprocessor.verifast-c-ghost
+      begin: "^(\\s*)(#)"
+      beginCaptures:
+        "2":
+          name: keyword.control.directive.verifast-c-ghost
+      end: "$"
+      patterns:
+      - name: keyword.control.directive.verifast-c-ghost
+        match: "\\b(include|define|undef|if|ifdef|ifndef|elif|else|endif)\\b"
+      - name: string.quoted.other.lt-gt.include.verifast-c-ghost
+        match: "<[^>\\n]+>"
+      - name: string.quoted.other.double.include.verifast-c-ghost
+        match: "\"[^\"]+\""
+  verifast-c-ghost-keyword:
+    match: "\
+      \\b(switch|case|return|for\
+      |void|if|else|while\
+      |break|default\
+      |int|true|false\
+      |assert|currentCodeFraction|currentThread|varargs|short\
+      |truncating|typedef|do\
+      |float|double|real\
+      |predicate|copredicate|requires|inductive|fixpoint\
+      |ensures|close|lemma|open|emp|invariant|lemma_auto\
+      |predicate_family|predicate_family_instance|predicate_ctor|leak\
+      |box_class|action|handle_predicate|preserved_by|consuming_box_predicate|consuming_handle_predicate|perform_action|nonghost_callers_only\
+      |create_box|above|below|and_handle|and_fresh_handle|create_handle|create_fresh_handle|dispose_box\
+      |produce_lemma_function_pointer_chunk|duplicate_lemma_function_pointer_chunk|produce_function_pointer_chunk\
+      |producing_box_predicate|producing_handle_predicate|producing_fresh_handle_predicate|box|handle|any|split_fraction|by|merge_fractions\
+      |unloadable_module|decreases|forall_|import_module|require_module|extends|permbased\
+      |terminates|abstract_type|fixpoint_auto|typeid)\\b\
+      "
+    name: verifast-c-ghost-keyword

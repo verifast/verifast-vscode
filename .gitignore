@@ -5,3 +5,4 @@ node_modules
 *.vsix
 injection-grammar.json
 injection-grammar-rust.json
+ghost-header-grammar.json

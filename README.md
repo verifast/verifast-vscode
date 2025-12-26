@@ -84,11 +84,15 @@ To get syntax highlighting for VeriFast annotations, insert the following into y
 
 Known TODO items:
 - In `.c` files, indented multiline annotations are not recognized as VeriFast ghost ranges
-- In `.rs` files, rust-analyzer's assignment of semantic token type 'Comment' to comment tokens overrides the VeriFast ghost range color
+- In `.rs` files, rust-analyzer's assignment of semantic token type 'Comment' to comment tokens overrides the VeriFast ghost range color. But: since release 2025-10-27, `rust-analyzer` supports configuration option `rust-analyzer.semanticHighlighting.comments.enable`. Setting it to `false` fixes this issue.
 - Browse VeriFast built-in header files
 - Code completion inside annotations
 
 ## Release Notes
+
+### 0.9.9 - 2025-12-26
+
+Added syntax highlighting for VeriFast ghost header (`.gh`) files.
 
 ### 0.9.8 - 2025-09-04
 
